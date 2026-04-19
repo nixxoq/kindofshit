@@ -1,0 +1,13 @@
+[project]
+name = "kindofshit"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "argon2>=0.1.10",
+    "argon2-cffi>=25.1.0",
+    "pyargon2>=1.1.2",
+    "tortoise>=0.1.1",
+    "tortoise-orm>=1.1.7",
+]
