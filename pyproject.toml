@@ -3,11 +3,20 @@ name = "kindofshit"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
-    "argon2>=0.1.10",
-    "argon2-cffi>=25.1.0",
-    "pyargon2>=1.1.2",
-    "tortoise>=0.1.1",
+    "asyncpg>=0.30.0",
+    "cryptography>=45.0.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.28.0",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
     "tortoise-orm>=1.1.7",
+    "uvicorn[standard]>=0.35.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.tortoise]
+tortoise_orm = "app.db.session.TORTOISE_ORM"
