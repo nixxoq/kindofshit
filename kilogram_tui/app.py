@@ -61,7 +61,7 @@ class MessageWidget(Static):
             if message.author_id == current_user_id
             else f"{message.author.display_name} ({message.author.username})"
         )
-        edited = " (edited)" if message.edited_at else ""
+        edited = " [#9e4197 italic](edited)[/]" if message.edited_at else ""
         super().__init__(
             f"{author}{edited}\n{message.content}",
             classes="message-row",
