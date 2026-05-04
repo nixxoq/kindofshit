@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.db.models import User
-    
+
 from tortoise import fields
 
 from app.db.base import BaseDB

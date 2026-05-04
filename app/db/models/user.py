@@ -13,5 +13,3 @@ class User(BaseDB):
 
     class Meta:
         table = "users"
-
-    

@@ -16,14 +16,18 @@ def auth_header(token: str) -> dict[str, str]:
 
 def get_user_id(db_path: str, username: str) -> int:
     with sqlite3.connect(db_path) as connection:
-        row = connection.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+        row = connection.execute(
+            "SELECT id FROM users WHERE username = ?", (username,)
+        ).fetchone()
     assert row is not None
     return int(row[0])
 
 
 def get_message_ciphertext(db_path: str, message_id: int) -> bytes:
     with sqlite3.connect(db_path) as connection:
-        row = connection.execute("SELECT ciphertext FROM messages WHERE id = ?", (message_id,)).fetchone()
+        row = connection.execute(
+            "SELECT ciphertext FROM messages WHERE id = ?", (message_id,)
+        ).fetchone()
     assert row is not None
     return row[0]
 
@@ -47,7 +51,9 @@ def test_open_dm_is_idempotent(client, seed_tokens, db_path) -> None:
     assert first.json()["id"] == second.json()["id"]
 
 
-def test_send_message_pushes_websocket_event_and_encrypts_storage(client, seed_tokens, db_path) -> None:
+def test_send_message_pushes_websocket_event_and_encrypts_storage(
+    client, seed_tokens, db_path
+) -> None:
     bob_id = get_user_id(db_path, "bob")
 
     dm_response = client.post(
@@ -57,7 +63,9 @@ def test_send_message_pushes_websocket_event_and_encrypts_storage(client, seed_t
     )
     dm_id = dm_response.json()["id"]
 
-    with client.websocket_connect("/ws", headers=auth_header(seed_tokens["bob"])) as websocket:
+    with client.websocket_connect(
+        "/ws", headers=auth_header(seed_tokens["bob"])
+    ) as websocket:
         ready = websocket.receive_json()
         assert ready["type"] == "ready"
 
@@ -79,7 +87,9 @@ def test_send_message_pushes_websocket_event_and_encrypts_storage(client, seed_t
         assert stored_ciphertext != b"hello bob"
 
 
-def test_message_history_supports_cursor_pagination(client, seed_tokens, db_path) -> None:
+def test_message_history_supports_cursor_pagination(
+    client, seed_tokens, db_path
+) -> None:
     bob_id = get_user_id(db_path, "bob")
     dm_id = client.post(
         "/api/dms/open",

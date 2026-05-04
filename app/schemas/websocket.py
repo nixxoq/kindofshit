@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 # TODO: add more events (message created, edited, removed, pinned, unpinned, etc.)
 
+
 class ReadyEventData(BaseModel):
     user_id: int
 

@@ -16,10 +16,12 @@ class AccountResponse(BaseModel):
     created_at: datetime
     token: str
 
-class LoginPayload(BaseModel): # form
+
+class LoginPayload(BaseModel):  # form
     username: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=1, max_length=20)    
-    
+    password: str = Field(min_length=1, max_length=20)
+
+
 class LoginResponse(BaseModel):
     user_id: int
     username: str

@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 
+
 # fixme: obsolete?
 def _as_bool(value: str | None, default: bool) -> bool:
     if value is None:
@@ -47,9 +48,9 @@ def decode_base64_key(value: str) -> bytes:
 
 
 def _dev_key(material: str) -> str:
-    return base64.urlsafe_b64encode(hashlib.sha256(material.encode("utf-8")).digest()).decode(
-        "utf-8"
-    )
+    return base64.urlsafe_b64encode(
+        hashlib.sha256(material.encode("utf-8")).digest()
+    ).decode("utf-8")
 
 
 # TODO: move this into .env file
@@ -70,7 +71,9 @@ def get_settings() -> Settings:
         auth_token_secret=auth_token_secret,
         auto_generate_schema=_as_bool(os.getenv("AUTO_GENERATE_SCHEMA"), False),
         snowflake_worker_id=int(os.getenv("SNOWFLAKE_WORKER_ID", "1")),
-        message_history_default_limit=int(os.getenv("MESSAGE_HISTORY_DEFAULT_LIMIT", "50")),
+        message_history_default_limit=int(
+            os.getenv("MESSAGE_HISTORY_DEFAULT_LIMIT", "50")
+        ),
         message_history_max_limit=int(os.getenv("MESSAGE_HISTORY_MAX_LIMIT", "100")),
     )
 

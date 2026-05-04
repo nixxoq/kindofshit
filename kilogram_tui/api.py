@@ -4,7 +4,13 @@ from urllib.parse import urlparse, urlunparse
 
 import httpx
 
-from kilogram_tui.models import DirectMessage, Message, MessagePage, PublicUser, SessionState
+from kilogram_tui.models import (
+    DirectMessage,
+    Message,
+    MessagePage,
+    PublicUser,
+    SessionState,
+)
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
 
@@ -33,7 +39,9 @@ def websocket_url_for(base_url: str) -> str:
     else:
         raise ValueError(f"Unsupported API URL scheme: {parsed.scheme}")
 
-    return urlunparse(parsed._replace(scheme=ws_scheme, path="/ws", params="", query="", fragment=""))
+    return urlunparse(
+        parsed._replace(scheme=ws_scheme, path="/ws", params="", query="", fragment="")
+    )
 
 
 class KilogramAPI:
@@ -57,7 +65,9 @@ class KilogramAPI:
     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         headers = kwargs.pop("headers", {})
         merged_headers = {**self.auth_headers(), **headers}
-        response = await self.client.request(method, path, headers=merged_headers, **kwargs)
+        response = await self.client.request(
+            method, path, headers=merged_headers, **kwargs
+        )
         if response.status_code == 401:
             raise UnauthorizedError("Invalid token")
         if response.is_error:
@@ -69,7 +79,9 @@ class KilogramAPI:
             raise KilogramAPIError(str(detail))
         return response
 
-    async def register(self, username: str, display_name: str, password: str) -> SessionState:
+    async def register(
+        self, username: str, display_name: str, password: str
+    ) -> SessionState:
         response = await self._request(
             "POST",
             "/api/register",
@@ -115,7 +127,9 @@ class KilogramAPI:
         )
         return [PublicUser.from_json(item) for item in response.json()]
 
-    async def open_dm(self, recipient_id: int, peer: PublicUser | None = None) -> DirectMessage:
+    async def open_dm(
+        self, recipient_id: int, peer: PublicUser | None = None
+    ) -> DirectMessage:
         response = await self._request(
             "POST",
             "/api/dms/open",

@@ -17,14 +17,20 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except Exception:
         await websocket.accept()
         await websocket.send_json(
-            {"type": "error", "data": ErrorEventData(detail="Invalid token").model_dump(mode="json")}
+            {
+                "type": "error",
+                "data": ErrorEventData(detail="Invalid token").model_dump(mode="json"),
+            }
         )
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
     await connection_manager.connect(auth.user.id, websocket)
     await websocket.send_json(
-        {"type": "ready", "data": ReadyEventData(user_id=auth.user.id).model_dump(mode="json")}
+        {
+            "type": "ready",
+            "data": ReadyEventData(user_id=auth.user.id).model_dump(mode="json"),
+        }
     )
 
     try:
@@ -34,7 +40,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "pong", "data": {}})
                 continue
             await websocket.send_json(
-                {"type": "error", "data": ErrorEventData(detail="Unsupported client event").model_dump(mode="json")}
+                {
+                    "type": "error",
+                    "data": ErrorEventData(
+                        detail="Unsupported client event"
+                    ).model_dump(mode="json"),
+                }
             )
     except WebSocketDisconnect:
         connection_manager.disconnect(auth.user.id, websocket)

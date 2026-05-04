@@ -6,7 +6,9 @@ from app.db.base import BaseDB
 
 
 class AuthToken(BaseDB):
-    user = fields.ForeignKeyField("models.User", related_name="auth_tokens", on_delete=fields.CASCADE)
+    user = fields.ForeignKeyField(
+        "models.User", related_name="auth_tokens", on_delete=fields.CASCADE
+    )
     public_id = fields.CharField(max_length=128, unique=True, db_index=True)
     token_hash = fields.CharField(max_length=64)
     name = fields.CharField(max_length=128)

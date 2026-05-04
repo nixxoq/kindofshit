@@ -3,7 +3,13 @@ from __future__ import annotations
 import pytest
 
 from kilogram_tui.api import KilogramAPI, websocket_url_for
-from kilogram_tui.app import DMListItem, KilogramTUI, LoginScreen, MainScreen, RegisterScreen
+from kilogram_tui.app import (
+    DMListItem,
+    KilogramTUI,
+    LoginScreen,
+    MainScreen,
+    RegisterScreen,
+)
 from kilogram_tui.models import DirectMessage, Message, MessagePage, PublicUser
 from kilogram_tui.models import SessionState
 from kilogram_tui.state import clear_session, load_session, save_session
@@ -42,7 +48,9 @@ def test_session_state_roundtrip_with_hidden_dm_ids(tmp_path, monkeypatch) -> No
     assert load_session() == session
 
 
-def test_session_state_loads_legacy_file_without_hidden_dm_ids(tmp_path, monkeypatch) -> None:
+def test_session_state_loads_legacy_file_without_hidden_dm_ids(
+    tmp_path, monkeypatch
+) -> None:
     state_file = tmp_path / "session.json"
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(state_file))
     state_file.write_text(
@@ -101,8 +109,14 @@ def assert_widget_inside(container, widget) -> None:
 
     assert widget_region.x >= container_region.x
     assert widget_region.y >= container_region.y
-    assert widget_region.x + widget_region.width <= container_region.x + container_region.width
-    assert widget_region.y + widget_region.height <= container_region.y + container_region.height
+    assert (
+        widget_region.x + widget_region.width
+        <= container_region.x + container_region.width
+    )
+    assert (
+        widget_region.y + widget_region.height
+        <= container_region.y + container_region.height
+    )
 
 
 def assert_widget_horizontally_centered(screen, widget) -> None:
@@ -185,7 +199,9 @@ class FakeAPI:
         return None
 
 
-async def test_message_context_menu_marks_foreign_actions_disabled(monkeypatch, tmp_path) -> None:
+async def test_message_context_menu_marks_foreign_actions_disabled(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
     app = KilogramTUI()
 
@@ -205,11 +221,19 @@ async def test_message_context_menu_marks_foreign_actions_disabled(monkeypatch, 
 
         assert app.screen.query_one("#context-edit").disabled is True
         assert app.screen.query_one("#context-delete").disabled is True
-        assert_widget_inside(app.screen.query_one("#message-context-menu"), app.screen.query_one("#context-edit"))
-        assert_widget_inside(app.screen.query_one("#message-context-menu"), app.screen.query_one("#context-delete"))
+        assert_widget_inside(
+            app.screen.query_one("#message-context-menu"),
+            app.screen.query_one("#context-edit"),
+        )
+        assert_widget_inside(
+            app.screen.query_one("#message-context-menu"),
+            app.screen.query_one("#context-delete"),
+        )
 
 
-async def test_reopening_message_context_menu_keeps_single_menu(monkeypatch, tmp_path) -> None:
+async def test_reopening_message_context_menu_keeps_single_menu(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
     app = KilogramTUI()
 
@@ -232,7 +256,9 @@ async def test_reopening_message_context_menu_keeps_single_menu(monkeypatch, tmp
         assert app.context_menu.message == second_message
 
 
-async def test_message_rerender_keeps_single_dom_node_per_message(monkeypatch, tmp_path) -> None:
+async def test_message_rerender_keeps_single_dom_node_per_message(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
     app = KilogramTUI()
 
@@ -266,7 +292,9 @@ async def test_message_rerender_keeps_single_dom_node_per_message(monkeypatch, t
         }
 
 
-async def test_incoming_unknown_dm_event_adds_dm_to_sidebar(monkeypatch, tmp_path) -> None:
+async def test_incoming_unknown_dm_event_adds_dm_to_sidebar(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
     app = KilogramTUI()
     incoming_dm = DirectMessage(
@@ -306,7 +334,9 @@ async def test_incoming_unknown_dm_event_adds_dm_to_sidebar(monkeypatch, tmp_pat
         assert dm_items[0].dm == incoming_dm
 
 
-async def test_close_dm_hides_sidebar_item_but_keeps_dm_state(monkeypatch, tmp_path) -> None:
+async def test_close_dm_hides_sidebar_item_but_keeps_dm_state(
+    monkeypatch, tmp_path
+) -> None:
     state_file = tmp_path / "session.json"
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(state_file))
     app = KilogramTUI()
@@ -410,11 +440,15 @@ async def test_incoming_message_unhides_closed_dm(monkeypatch, tmp_path) -> None
         assert list(app.screen.query(DMListItem))[0].dm == dm
 
 
-async def test_incoming_known_inactive_dm_does_not_touch_active_messages(monkeypatch, tmp_path) -> None:
+async def test_incoming_known_inactive_dm_does_not_touch_active_messages(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
     app = KilogramTUI()
     active_dm = DirectMessage(id=20, peer_user_id=2, created_at="2026-05-04T00:00:00Z")
-    inactive_dm = DirectMessage(id=21, peer_user_id=3, created_at="2026-05-04T00:00:00Z")
+    inactive_dm = DirectMessage(
+        id=21, peer_user_id=3, created_at="2026-05-04T00:00:00Z"
+    )
     active_message = Message(10, active_dm.id, 1, "active", "2026-05-04T00:00:00Z")
 
     async with app.run_test(size=(120, 40)) as pilot:
@@ -446,7 +480,9 @@ async def test_incoming_known_inactive_dm_does_not_touch_active_messages(monkeyp
         assert len(list(app.screen.query(".message-row"))) == 1
 
 
-async def test_logout_clears_session_and_returns_to_login(monkeypatch, tmp_path) -> None:
+async def test_logout_clears_session_and_returns_to_login(
+    monkeypatch, tmp_path
+) -> None:
     state_file = tmp_path / "session.json"
     monkeypatch.setenv("KILOGRAM_TUI_STATE", str(state_file))
     session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")

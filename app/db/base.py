@@ -6,7 +6,9 @@ from app.services.snowflake import generate_snowflake
 
 
 class BaseDB(Model):
-    id = fields.BigIntField(primary_key=True, default=generate_snowflake, generated=False)
+    id = fields.BigIntField(
+        primary_key=True, default=generate_snowflake, generated=False
+    )
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
 

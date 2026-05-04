@@ -44,7 +44,9 @@ async def test_user_search_requires_auth(api_client: httpx.AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_user_search_matches_username_and_display_name(api_client: httpx.AsyncClient) -> None:
+async def test_user_search_matches_username_and_display_name(
+    api_client: httpx.AsyncClient,
+) -> None:
     current_user = await create_user("alice", "Alice")
     bob = await create_user("bobby", "Builder")
     carol = await create_user("carol", "Bobby Tables")
@@ -95,7 +97,9 @@ async def test_user_search_respects_limit(api_client: httpx.AsyncClient) -> None
 
 
 @pytest.mark.asyncio
-async def test_dm_list_includes_peer_public_profile(api_client: httpx.AsyncClient) -> None:
+async def test_dm_list_includes_peer_public_profile(
+    api_client: httpx.AsyncClient,
+) -> None:
     alice = await create_user("alice", "Alice Current")
     bob = await create_user("bob", "Bob Builder")
 
