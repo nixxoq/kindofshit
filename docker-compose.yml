@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kilogram
+      POSTGRES_PASSWORD: kilogram
+      POSTGRES_DB: kilogram
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kilogram -d kilogram"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgres://kilogram:kilogram@postgres:5432/kilogram
+      AUTO_GENERATE_SCHEMA: "true"
+      DEBUG: "true"
+    ports:
+      - "8000:8000"
+    networks:
+      - public
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+
+networks:
+  public:
+  backend:
+    internal: true

@@ -1,0 +1,241 @@
+$kgm-ink: #090a35;
+$kgm-panel: #56004f;
+$kgm-panel-dark: #060733;
+$kgm-line: #94407d;
+$kgm-hot: #c63b7d;
+$kgm-green: #00836b;
+$kgm-text: #f7d6ef;
+
+Screen {
+    background: $kgm-ink;
+    color: $kgm-text;
+}
+
+Input {
+    background: $kgm-panel;
+    color: $kgm-text;
+    border: solid $kgm-line;
+    height: 3;
+}
+
+Input:focus {
+    border: solid $kgm-hot;
+}
+
+Button {
+    background: $kgm-panel;
+    color: $kgm-text;
+    border: solid $kgm-line;
+    height: 3;
+    min-width: 12;
+}
+
+Button:focus {
+    border: solid $kgm-hot;
+}
+
+Button:disabled {
+    color: #806070;
+    background: #260022;
+}
+
+#auth-stage {
+    width: 100%;
+    height: 100%;
+    layout: vertical;
+    align: center middle;
+}
+
+#auth-title {
+    width: 52;
+    height: 1;
+    margin-bottom: 1;
+    content-align: center middle;
+    color: white;
+    text-style: bold;
+}
+
+#auth-panel {
+    width: 52;
+    background: $kgm-panel-dark;
+    border: solid $kgm-line;
+    padding: 1 2;
+}
+
+.login-panel {
+    height: 24;
+}
+
+#auth-panel Input {
+    margin-top: 1;
+    width: 100%;
+}
+
+#auth-panel Button {
+    margin-top: 1;
+    width: 100%;
+}
+
+.register-panel {
+    height: 32;
+}
+
+#brand {
+    width: 100%;
+    height: 4;
+    background: $kgm-panel;
+    color: $kgm-green;
+    border: solid $kgm-line;
+    content-align: center middle;
+    text-style: bold;
+}
+
+#auth-status {
+    height: 1;
+    margin-top: 1;
+    color: $kgm-hot;
+}
+
+#main-root {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#main-header {
+    height: 3;
+}
+
+#main-title {
+    width: 1fr;
+    height: 3;
+    content-align: center middle;
+    color: white;
+    text-style: bold;
+}
+
+#logout-button {
+    width: 14;
+    height: 3;
+    min-width: 0;
+}
+
+#main-frame {
+    width: 100%;
+    height: 1fr;
+    background: $kgm-panel-dark;
+    border: solid $kgm-line;
+}
+
+#left-column {
+    width: 30%;
+    min-width: 28;
+    height: 100%;
+    padding: 1;
+}
+
+#dm-list {
+    height: 2fr;
+    background: $kgm-panel;
+    border: solid $kgm-line;
+}
+
+#search-panel {
+    height: 1fr;
+    margin-top: 1;
+    background: $kgm-panel;
+    border: solid $kgm-line;
+    padding: 1;
+}
+
+#user-search {
+    height: 3;
+}
+
+#user-results {
+    height: 1fr;
+    margin-top: 1;
+}
+
+#chat-column {
+    width: 1fr;
+    height: 100%;
+    padding: 1;
+}
+
+#chat-title {
+    height: 1;
+    color: white;
+}
+
+#messages {
+    height: 1fr;
+    background: $kgm-panel;
+    border: solid $kgm-line;
+    padding: 1;
+}
+
+#message-list {
+    width: 100%;
+    height: auto;
+}
+
+#composer-row {
+    height: 4;
+    background: $kgm-panel-dark;
+}
+
+#composer {
+    width: 1fr;
+    height: 3;
+}
+
+#send-message {
+    width: 12;
+}
+
+#status {
+    height: 1;
+    color: $kgm-hot;
+}
+
+.list-row {
+    height: 3;
+    background: $kgm-panel;
+    color: $kgm-text;
+}
+
+.list-row:hover {
+    background: #6e075f;
+}
+
+.message-row {
+    width: 100%;
+    height: auto;
+    min-height: 3;
+    background: #460040;
+    color: $kgm-text;
+    border: solid $kgm-line;
+    margin-bottom: 1;
+    padding: 0 1;
+}
+
+.own-message {
+    color: #d8fff4;
+}
+
+#message-context-menu {
+    layer: overlay;
+    width: 18;
+    height: 10;
+    background: $kgm-panel-dark;
+    border: solid $kgm-line;
+    padding: 1;
+}
+
+#message-context-menu Button {
+    width: 100%;
+    height: 3;
+    min-width: 0;
+    margin-bottom: 0;
+}
