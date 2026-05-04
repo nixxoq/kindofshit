@@ -4,6 +4,7 @@ from typing import cast
 
 from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
+from tortoise import timezone
 
 from app.db.models import DirectMessage, Message, User
 from app.schemas.dm import DMResponse
@@ -109,3 +110,29 @@ async def delete_message(dm: DirectMessage, author: User, message_id: int):
         "status" : "ok",
         "updated_at" : dm.updated_at
         }
+
+
+async def edit_message(dm: DirectMessage, author: User, message_id: int, new_content: str):
+    message = await Message.get_or_none(id=message_id, dm_id=dm.id)
+
+    if message is None:
+        return {"error" : "message is not found"}
+    
+    if message.author_id != author.id:
+        return {"error" : "wrong author"}
+
+    old_content = decrypt_message_text(message.ciphertext, message.nonce, message.key_version)
+    if (new_content == old_content):
+        return serialize_message(message)
+   
+    ciphertext, nonce, key_version = encrypt_message_text(new_content)
+
+    message.ciphertext = ciphertext
+    message.nonce = nonce
+    message.key_version = key_version
+    message.edited_at = timezone.now()
+
+    await message.save(update_fields=["ciphertext", "nonce", "key_version", "edited_at"])
+
+    return serialize_message(message)
+    

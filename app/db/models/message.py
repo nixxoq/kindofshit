@@ -11,6 +11,7 @@ class Message(BaseDB):
     ciphertext = fields.BinaryField()
     nonce = fields.BinaryField()
     key_version = fields.IntField(default=1)
+    edited_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "messages"
