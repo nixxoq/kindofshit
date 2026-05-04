@@ -9,7 +9,11 @@ from tortoise import timezone
 from app.db.models import DirectMessage, Message, User
 from app.schemas.account import UserPublicResponse
 from app.schemas.dm import DMResponse
-from app.schemas.message import MessageHistoryResponse, MessageResponse
+from app.schemas.message import (
+    MessageAuthorResponse,
+    MessageHistoryResponse,
+    MessageResponse,
+)
 from app.services.crypto import decrypt_message_text, encrypt_message_text
 from app.utils import MessageError
 
@@ -71,15 +75,21 @@ async def serialize_dm(dm: DirectMessage, current_user_id: int) -> DMResponse:
     )
 
 
-def serialize_message(message: Message) -> MessageResponse:
+def serialize_message(message: Message, author: User) -> MessageResponse:
     return MessageResponse(
         id=message.id,
         dm_id=message.dm_id,
         author_id=message.author_id,
+        author=MessageAuthorResponse(
+            id=author.id,
+            username=author.username,
+            display_name=author.display_name,
+        ),
         content=decrypt_message_text(
             message.ciphertext, message.nonce, message.key_version
         ),
         created_at=message.created_at,
+        edited_at=message.edited_at,
     )
 
 
@@ -103,8 +113,8 @@ async def list_messages(
     if before is not None:
         query = query.filter(id__lt=before)
 
-    messages = await query.limit(limit)
-    items = [serialize_message(message) for message in messages]
+    messages = await query.prefetch_related("author").limit(limit)
+    items = [serialize_message(message, message.author) for message in messages]
     next_before = messages[-1].id if messages else None
     return MessageHistoryResponse(items=items, next_before=next_before)
 
@@ -132,7 +142,7 @@ async def edit_message(
 
     if not message:
         return {"error": MessageError.MESSAGE_NOT_FOUND}
-    
+
     if message.author_id != author.id:
         return {"error": MessageError.FORBIDDEN}
 
@@ -140,15 +150,15 @@ async def edit_message(
         message.ciphertext, message.nonce, message.key_version
     )
     if new_content == old_content:
-        return {"status": "ok", "message": serialize_message(message)}
+        return {"status": "ok", "message": serialize_message(message, author)}
 
     ciphertext, nonce, key_version = encrypt_message_text(new_content)
-    
+
     message.ciphertext = ciphertext
     message.nonce = nonce
     message.key_version = key_version
     message.edited_at = timezone.now()
-    
+
     await message.save(
         update_fields=["ciphertext", "nonce", "key_version", "edited_at"]
     )
@@ -156,4 +166,4 @@ async def edit_message(
     dm.updated_at = timezone.now()
     await dm.save(update_fields=["updated_at"])
 
-    return {"status": "ok", "message": serialize_message(message)}
+    return {"status": "ok", "message": serialize_message(message, author)}

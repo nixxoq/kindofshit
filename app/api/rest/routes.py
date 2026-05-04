@@ -181,7 +181,7 @@ async def send_message(
         )
 
     message = await create_message(dm, auth.user, payload.content)
-    response = serialize_message(message)
+    response = serialize_message(message, auth.user)
     event = {
         "type": WSEventType.MESSAGE_CREATED,
         "data": response.model_dump(mode="json"),
