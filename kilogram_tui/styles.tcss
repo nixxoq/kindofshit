@@ -220,8 +220,6 @@ Button:disabled {
     content-align: left middle;
 }
 
-
-.list-row:hover .dm-close-button,
 .dm-close-button {
     width: 5;
     min-width: 5;
@@ -233,7 +231,7 @@ Button:disabled {
     content-align: center middle;
 }
 
-.dm-close-button:hover,
+.list-row:hover .dm-close-button,
 .dm-close-button:focus {
     color: $kgm-text;
     border: solid $kgm-hot;

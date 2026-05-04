@@ -48,16 +48,19 @@ class DMCloseButton(Button):
         self.dm_id = dm_id
         super().__init__("×", classes="dm-close-button")
 
-    async def on_click(self, event: events.Click) -> None:
+    def on_mouse_down(self, event: events.MouseDown) -> None:
         event.stop()
-        await cast(KilogramTUI, self.app).close_dm(self.dm_id)
 
 
 class MessageWidget(Static):
     def __init__(self, message: Message, current_user_id: int) -> None:
         self.message = message
         self.current_user_id = current_user_id
-        author = "me" if message.author_id == current_user_id else f"{message.author.display_name} ({message.author.username})"
+        author = (
+            "me"
+            if message.author_id == current_user_id
+            else f"{message.author.display_name} ({message.author.username})"
+        )
         edited = " edited" if message.edited_at else ""
         super().__init__(
             f"{author}{edited}\n{message.content}",
@@ -236,9 +239,9 @@ class MainScreen(Screen):
             await app.submit_composer()
         elif event.button.id == "logout-button":
             await app.logout()
-        # elif isinstance(event.button, DMCloseButton):
-        #    await app.close_dm(event.button.dm_id)
-        #    event.stop()
+        elif isinstance(event.button, DMCloseButton):
+            await app.close_dm(event.button.dm_id)
+            event.stop()
         elif event.button.id == "load-older":
             await app.load_older_messages()
         elif event.button.id == "context-edit":
