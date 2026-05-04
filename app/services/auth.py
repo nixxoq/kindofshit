@@ -1,31 +1,27 @@
-# TODO: refactor
-
 from __future__ import annotations
 
-import hmac
 import hashlib
+import hmac
+import secrets
 from dataclasses import dataclass
 
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 from tortoise import timezone
 
 from app.config import get_settings
 from app.db.models import AuthToken, User
 from app.schemas.account import AccountCreationRequest, LoginPayload
-
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
-import secrets
-
-### login / register
+from app.utils import AuthError
 
 ph = PasswordHasher()
 
 
-async def login(payload: LoginPayload) -> dict[str, str]:
+async def login(payload: LoginPayload) -> dict:
     user = await User.get_or_none(username=payload.username)
 
     if not user:
-        return {"error": "user_not_found"}  # TODO: use enum classes for errors
+        return {"error": AuthError.USER_NOT_FOUND}
 
     try:
         ph.verify(user.hashed_password, payload.password)
@@ -34,49 +30,46 @@ async def login(payload: LoginPayload) -> dict[str, str]:
             user.hashed_password = ph.hash(payload.password)
             await user.save(update_fields=["hashed_password"])
 
-        await AuthToken.filter(
-            user=user,
-            revoked_at__isnull=True
-        ).update(revoked_at=timezone.now())
-        
+        await AuthToken.filter(user=user, revoked_at__isnull=True).update(
+            revoked_at=timezone.now()
+        )
+
         token = await create_auth_token(user, name="Login Token")
 
         return {
-            "status" : "ok",
-            "user_id" : user.id, 
-            "username" : user.username,
+            "status": "ok",
+            "user_id": user.id,
+            "username": user.username,
             "token": token,
         }
-    
+
     except VerifyMismatchError:
-        return {"error": "wrong_password"}  # TODO: use enum classes for errors
+        return {"error": AuthError.WRONG_PASSWORD}
 
 
-async def register(payload: AccountCreationRequest) -> dict[str, str]:
-    user = await User.get_or_none(username=payload.username)
-    if user:
-        return {"error" : "user_exists"}
-    
+async def register(payload: AccountCreationRequest) -> dict:
+    if await User.exists(username=payload.username):
+        return {"error": AuthError.USER_EXISTS}
+
     hashed = ph.hash(password=payload.password)
 
     new_user = await User.create(
         username=payload.username,
         display_name=payload.display_name,
         hashed_password=hashed,
-        is_test_user=False  # TODO: remove that
+        is_test_user=False,
     )
-    
+
     token = await create_auth_token(new_user, name="Registration")
 
     return {
-        "status" : "ok", 
-        "id": new_user.id, 
+        "status": "ok",
+        "id": new_user.id,
         "created_at": new_user.created_at,
         "token": token,
     }
 
 
-### token generation
 @dataclass
 class AuthenticatedContext:
     user: User
@@ -87,16 +80,17 @@ async def create_auth_token(user: User, name: str = "login") -> str:
     public_id = secrets.token_hex(8)
     secret_part = secrets.token_urlsafe(32)
     raw_token = f"kgm_{public_id}.{secret_part}"
-    
+
     await AuthToken.create(
         user=user,
         public_id=public_id,
         token_hash=hash_token(raw_token=raw_token),
         name=name,
-        is_seed=False
+        is_seed=False,
     )
-    
+
     return raw_token
+
 
 def hash_token(raw_token: str) -> str:
     secret = get_settings().auth_secret_bytes
@@ -124,6 +118,7 @@ def extract_raw_token(authorization: str | None) -> str | None:
         return authorization[7:].strip()
 
     return authorization
+
 
 async def authenticate_token(raw_token: str) -> AuthenticatedContext:
     public_id = parse_public_id(raw_token)

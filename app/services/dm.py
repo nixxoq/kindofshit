@@ -10,6 +10,7 @@ from app.db.models import DirectMessage, Message, User
 from app.schemas.dm import DMResponse
 from app.schemas.message import MessageHistoryResponse, MessageResponse
 from app.services.crypto import decrypt_message_text, encrypt_message_text
+from app.utils import MessageError
 
 
 def normalize_dm_pair(user_a_id: int, user_b_id: int) -> tuple[int, int]:
@@ -97,16 +98,15 @@ async def delete_message(dm: DirectMessage, author: User, message_id: int) -> di
     message = await Message.get_or_none(id=message_id, dm_id=dm.id)
 
     if not message:
-        return {"error": "message_not_found"}
+        return {"error": MessageError.MESSAGE_NOT_FOUND}
 
     if message.author_id != author.id:
-        return {"error": "forbidden"}
+        return {"error": MessageError.FORBIDDEN}
 
     await message.delete()
-
     dm.updated_at = timezone.now()
-    await dm.save(update_fields=["updated_at"])
 
+    await dm.save(update_fields=["updated_at"])
     return {"status": "ok"}
 
 
@@ -115,11 +115,11 @@ async def edit_message(
 ) -> dict:
     message = await Message.get_or_none(id=message_id, dm_id=dm.id)
 
-    if message is None:
-        return {"error": "message_not_found"}
-
+    if not message:
+        return {"error": MessageError.MESSAGE_NOT_FOUND}
+    
     if message.author_id != author.id:
-        return {"error": "forbidden"}
+        return {"error": MessageError.FORBIDDEN}
 
     old_content = decrypt_message_text(
         message.ciphertext, message.nonce, message.key_version
@@ -128,12 +128,12 @@ async def edit_message(
         return {"status": "ok", "message": serialize_message(message)}
 
     ciphertext, nonce, key_version = encrypt_message_text(new_content)
-
+    
     message.ciphertext = ciphertext
     message.nonce = nonce
     message.key_version = key_version
     message.edited_at = timezone.now()
-
+    
     await message.save(
         update_fields=["ciphertext", "nonce", "key_version", "edited_at"]
     )
