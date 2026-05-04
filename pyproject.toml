@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "argon2-cffi>=25.1.0",
     "asyncpg>=0.30.0",
     "cryptography>=45.0.0",
     "fastapi>=0.115.0",
@@ -12,6 +13,7 @@ dependencies = [
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
     "tortoise-orm>=1.1.7",
+    "tzdata>=2026.2",
     "uvicorn[standard]>=0.35.0",
 ]
 
