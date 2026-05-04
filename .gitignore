@@ -210,3 +210,4 @@ __marimo__/
 .pytest_cache/
 .codex/
 .agents/
+test.sqlite3
