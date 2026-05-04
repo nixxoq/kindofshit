@@ -220,19 +220,24 @@ Button:disabled {
     content-align: left middle;
 }
 
-.dm-close-button {
-    width: 3;
-    height: 3;
-    min-width: 0;
-    background: #3a0035;
-    color: #806070;
-    border: none;
-}
 
 .list-row:hover .dm-close-button,
+.dm-close-button {
+    width: 5;
+    min-width: 5;
+    height: 3;
+    padding: 0;
+    background: #3a0035;
+    color: #f7d6ef;
+    border: solid $kgm-line;
+    content-align: center middle;
+}
+
+.dm-close-button:hover,
 .dm-close-button:focus {
     color: $kgm-text;
-    border: solid $kgm-line;
+    border: solid $kgm-hot;
+    background: #6e075f;
 }
 
 .message-row {

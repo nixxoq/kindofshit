@@ -39,8 +39,12 @@ class DMListItem(ListItem):
 class DMCloseButton(Button):
     def __init__(self, dm_id: int) -> None:
         self.dm_id = dm_id
-        super().__init__("x", classes="dm-close-button")
+        super().__init__("×", classes="dm-close-button")
 
+    async def on_click(self, event: events.Click) -> None:
+        event.stop()
+        await cast(KilogramTUI, self.app).close_dm(self.dm_id)
+        
 
 class MessageWidget(Static):
     def __init__(self, message: Message, current_user_id: int) -> None:
@@ -223,9 +227,9 @@ class MainScreen(Screen):
             await app.submit_composer()
         elif event.button.id == "logout-button":
             await app.logout()
-        elif isinstance(event.button, DMCloseButton):
-            await app.close_dm(event.button.dm_id)
-            event.stop()
+        #elif isinstance(event.button, DMCloseButton):
+        #    await app.close_dm(event.button.dm_id)
+        #    event.stop()
         elif event.button.id == "load-older":
             await app.load_older_messages()
         elif event.button.id == "context-edit":
