@@ -12,13 +12,17 @@ dependencies = [
     "httpx>=0.28.0",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
+    "textual>=6.0.0",
     "tortoise-orm>=1.1.7",
     "tzdata>=2026.2",
     "uvicorn[standard]>=0.35.0",
+    "websockets>=16.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
 
 [tool.tortoise]
 tortoise_orm = "app.db.session.TORTOISE_ORM"

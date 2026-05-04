@@ -14,7 +14,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        await init_orm(database_url=app_settings.database_url)
+        await init_orm(
+            database_url=app_settings.database_url,
+            auto_generate_schema=app_settings.auto_generate_schema,
+        )
         try:
             yield
         finally:

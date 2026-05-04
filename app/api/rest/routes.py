@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from tortoise.expressions import Q
 
 from app.api.dependencies import get_current_auth_context
 from app.db import healthcheck
+from app.db.models import User
 from app.utils import (
     AuthError,
     MessageError,
@@ -24,6 +26,7 @@ from app.schemas.account import (
     AccountResponse,
     LoginPayload,
     LoginResponse,
+    UserPublicResponse,
 )
 from app.services.auth import (
     AuthenticatedContext,
@@ -92,6 +95,29 @@ async def login(payload: LoginPayload) -> LoginResponse:
     return LoginResponse(**result)
 
 
+@router.get("/users/search", response_model=list[UserPublicResponse])
+async def search_users(
+    q: str = Query(min_length=1, max_length=128),
+    limit: int = Query(default=10, ge=1, le=20),
+    auth: AuthenticatedContext = Depends(get_current_auth_context),
+) -> list[UserPublicResponse]:
+    users = (
+        await User.filter(Q(username__icontains=q) | Q(display_name__icontains=q))
+        .exclude(id=auth.user.id)
+        .order_by("username")
+        .limit(limit)
+        .all()
+    )
+    return [
+        UserPublicResponse(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+        )
+        for user in users
+    ]
+
+
 @router.post("/dms/open", response_model=DMResponse)
 async def open_dm(
     payload: OpenDMRequest,
@@ -109,7 +135,7 @@ async def open_dm(
         )
 
     dm = await open_or_create_dm(auth.user, recipient)
-    return serialize_dm(dm, auth.user.id)
+    return await serialize_dm(dm, auth.user.id)
 
 
 @router.get("/dms", response_model=list[DMResponse])
@@ -117,7 +143,7 @@ async def list_dms(
     auth: AuthenticatedContext = Depends(get_current_auth_context),
 ) -> list[DMResponse]:
     dms = await list_dms_for_user(auth.user.id)
-    return [serialize_dm(dm, auth.user.id) for dm in dms]
+    return [await serialize_dm(dm, auth.user.id) for dm in dms]
 
 
 @router.get("/dms/{dm_id}/messages", response_model=MessageHistoryResponse)

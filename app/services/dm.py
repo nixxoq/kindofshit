@@ -7,6 +7,7 @@ from tortoise.expressions import Q
 from tortoise import timezone
 
 from app.db.models import DirectMessage, Message, User
+from app.schemas.account import UserPublicResponse
 from app.schemas.dm import DMResponse
 from app.schemas.message import MessageHistoryResponse, MessageResponse
 from app.services.crypto import decrypt_message_text, encrypt_message_text
@@ -49,11 +50,25 @@ def is_dm_participant(dm: DirectMessage, user_id: int) -> bool:
     return user_id in {dm.user_low_id, dm.user_high_id}
 
 
-def serialize_dm(dm: DirectMessage, current_user_id: int) -> DMResponse:
+def serialize_public_user(user: User) -> UserPublicResponse:
+    return UserPublicResponse(
+        id=user.id,
+        username=user.username,
+        display_name=user.display_name,
+    )
+
+
+async def serialize_dm(dm: DirectMessage, current_user_id: int) -> DMResponse:
     peer_user_id = (
         dm.user_high_id if dm.user_low_id == current_user_id else dm.user_low_id
     )
-    return DMResponse(id=dm.id, peer_user_id=peer_user_id, created_at=dm.created_at)
+    peer = await User.get(id=peer_user_id)
+    return DMResponse(
+        id=dm.id,
+        peer_user_id=peer_user_id,
+        peer=serialize_public_user(peer),
+        created_at=dm.created_at,
+    )
 
 
 def serialize_message(message: Message) -> MessageResponse:

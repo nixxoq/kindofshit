@@ -24,11 +24,16 @@ def build_tortoise_config(database_url: str | None = None) -> dict:
 TORTOISE_ORM = build_tortoise_config()
 
 
-async def init_orm(database_url: str | None = None) -> None:
+async def init_orm(
+    database_url: str | None = None,
+    auto_generate_schema: bool = False,
+) -> None:
     await Tortoise.init(
         config=build_tortoise_config(database_url=database_url),
         _enable_global_fallback=True,
     )
+    if auto_generate_schema:
+        await Tortoise.generate_schemas(safe=True)
 
 
 async def close_orm() -> None:

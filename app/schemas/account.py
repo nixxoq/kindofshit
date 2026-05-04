@@ -24,3 +24,9 @@ class LoginResponse(BaseModel):
     user_id: int
     username: str
     token: str
+
+
+class UserPublicResponse(BaseModel):
+    id: int
+    username: str
+    display_name: str
