@@ -26,7 +26,20 @@ class UserListItem(ListItem):
 class DMListItem(ListItem):
     def __init__(self, dm: DirectMessage) -> None:
         self.dm = dm
-        super().__init__(Label(dm.title), classes="list-row")
+        super().__init__(
+            Horizontal(
+                Label(dm.title, classes="dm-title"),
+                DMCloseButton(dm.id),
+                classes="dm-row-content",
+            ),
+            classes="list-row",
+        )
+
+
+class DMCloseButton(Button):
+    def __init__(self, dm_id: int) -> None:
+        self.dm_id = dm_id
+        super().__init__("x", classes="dm-close-button")
 
 
 class MessageWidget(Static):
@@ -210,6 +223,9 @@ class MainScreen(Screen):
             await app.submit_composer()
         elif event.button.id == "logout-button":
             await app.logout()
+        elif isinstance(event.button, DMCloseButton):
+            await app.close_dm(event.button.dm_id)
+            event.stop()
         elif event.button.id == "load-older":
             await app.load_older_messages()
         elif event.button.id == "context-edit":
@@ -234,6 +250,7 @@ class KilogramTUI(App):
         self.api: KilogramAPI | None = None
         self.session: SessionState | None = None
         self.dms: dict[int, DirectMessage] = {}
+        self.hidden_dm_ids: set[int] = set()
         self.search_results: list[PublicUser] = []
         self.active_dm: DirectMessage | None = None
         self.messages: list[Message] = []
@@ -252,6 +269,7 @@ class KilogramTUI(App):
             return
 
         self.session = session
+        self.hidden_dm_ids = set(session.hidden_dm_ids)
         self.api = KilogramAPI(session.base_url, session.token)
         try:
             await self.api.list_dms()
@@ -306,6 +324,7 @@ class KilogramTUI(App):
 
     def set_authenticated(self, session: SessionState) -> None:
         self.session = session
+        self.hidden_dm_ids = set(session.hidden_dm_ids)
         save_session(session)
         self.switch_screen(MainScreen())
         self.start_ws()
@@ -330,6 +349,7 @@ class KilogramTUI(App):
         clear_session()
         self.session = None
         self.dms.clear()
+        self.hidden_dm_ids.clear()
         self.search_results.clear()
         self.active_dm = None
         self.messages.clear()
@@ -347,11 +367,24 @@ class KilogramTUI(App):
         event_type = event.get("type")
         data = event.get("data", {})
         if event_type == "message.created":
-            await self.apply_message_created(Message.from_json(data))
+            await self.handle_message_created_event(Message.from_json(data))
         elif event_type == "message.updated":
             await self.apply_message_updated(Message.from_json(data))
         elif event_type == "message.deleted":
             await self.apply_message_deleted(int(data["dm_id"]), int(data["message_id"]))
+
+    async def handle_message_created_event(self, message: Message) -> None:
+        if message.dm_id not in self.dms:
+            await self.refresh_dms()
+            if isinstance(self.screen, MainScreen):
+                self.screen.set_status("new message")
+        if message.dm_id in self.hidden_dm_ids:
+            self.hidden_dm_ids.discard(message.dm_id)
+            self.persist_hidden_dm_ids()
+            await self.render_dms()
+
+        if self.active_dm is not None and message.dm_id == self.active_dm.id:
+            await self.apply_message_created(message)
 
     async def with_unauthorized_handling(self, action) -> None:
         try:
@@ -368,14 +401,16 @@ class KilogramTUI(App):
         async def action() -> None:
             assert self.api is not None
             dms = await self.api.list_dms()
+            refreshed_dms: dict[int, DirectMessage] = {}
             for dm in dms:
                 existing = self.dms.get(dm.id)
-                self.dms[dm.id] = DirectMessage(
+                refreshed_dms[dm.id] = DirectMessage(
                     id=dm.id,
                     peer_user_id=dm.peer_user_id,
                     created_at=dm.created_at,
-                    peer=existing.peer if existing else None,
+                    peer=dm.peer or (existing.peer if existing else None),
                 )
+            self.dms = refreshed_dms
             await self.render_dms()
 
         await self.with_unauthorized_handling(action)
@@ -386,6 +421,8 @@ class KilogramTUI(App):
         dm_list = self.screen.query_one("#dm-list", ListView)
         await dm_list.clear()
         for dm in self.dms.values():
+            if dm.id in self.hidden_dm_ids:
+                continue
             await dm_list.append(DMListItem(dm))
 
     async def search_users(self, query: str) -> None:
@@ -413,10 +450,37 @@ class KilogramTUI(App):
             assert self.api is not None
             dm = await self.api.open_dm(user.id, peer=user)
             self.dms[dm.id] = dm
+            if dm.id in self.hidden_dm_ids:
+                self.hidden_dm_ids.discard(dm.id)
+                self.persist_hidden_dm_ids()
             await self.render_dms()
             await self.select_dm(dm)
 
         await self.with_unauthorized_handling(action)
+
+    async def close_dm(self, dm_id: int) -> None:
+        self.hidden_dm_ids.add(dm_id)
+        self.persist_hidden_dm_ids()
+        if self.active_dm is not None and self.active_dm.id == dm_id:
+            self.active_dm = None
+            self.messages.clear()
+            self.next_before = None
+            self.editing_message = None
+            self.close_message_context()
+            await self.render_messages()
+        await self.render_dms()
+
+    def persist_hidden_dm_ids(self) -> None:
+        if self.session is None:
+            return
+        self.session = SessionState(
+            base_url=self.session.base_url,
+            token=self.session.token,
+            user_id=self.session.user_id,
+            username=self.session.username,
+            hidden_dm_ids=frozenset(self.hidden_dm_ids),
+        )
+        save_session(self.session)
 
     async def select_dm(self, dm: DirectMessage) -> None:
         self.active_dm = dm

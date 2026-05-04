@@ -28,6 +28,9 @@ def load_session(path: Path | None = None) -> SessionState | None:
             token=str(data["token"]),
             user_id=int(data["user_id"]),
             username=str(data["username"]),
+            hidden_dm_ids=frozenset(
+                int(dm_id) for dm_id in data.get("hidden_dm_ids", [])
+            ),
         )
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return None
@@ -41,6 +44,7 @@ def save_session(session: SessionState, path: Path | None = None) -> None:
         "token": session.token,
         "user_id": session.user_id,
         "username": session.username,
+        "hidden_dm_ids": sorted(session.hidden_dm_ids),
     }
     target.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 

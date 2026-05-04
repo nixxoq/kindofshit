@@ -209,6 +209,32 @@ Button:disabled {
     background: #6e075f;
 }
 
+.dm-row-content {
+    width: 100%;
+    height: 3;
+}
+
+.dm-title {
+    width: 1fr;
+    height: 3;
+    content-align: left middle;
+}
+
+.dm-close-button {
+    width: 3;
+    height: 3;
+    min-width: 0;
+    background: #3a0035;
+    color: #806070;
+    border: none;
+}
+
+.list-row:hover .dm-close-button,
+.dm-close-button:focus {
+    color: $kgm-text;
+    border: solid $kgm-line;
+}
+
 .message-row {
     width: 100%;
     height: auto;

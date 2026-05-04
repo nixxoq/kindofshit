@@ -9,6 +9,7 @@ class SessionState:
     token: str
     user_id: int
     username: str
+    hidden_dm_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True)

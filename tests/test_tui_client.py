@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from kilogram_tui.api import KilogramAPI, websocket_url_for
-from kilogram_tui.app import KilogramTUI, LoginScreen, MainScreen, RegisterScreen
-from kilogram_tui.models import DirectMessage, Message
+from kilogram_tui.app import DMListItem, KilogramTUI, LoginScreen, MainScreen, RegisterScreen
+from kilogram_tui.models import DirectMessage, Message, MessagePage, PublicUser
 from kilogram_tui.models import SessionState
 from kilogram_tui.state import clear_session, load_session, save_session
 
@@ -24,6 +24,45 @@ def test_session_state_roundtrip(tmp_path, monkeypatch) -> None:
     assert load_session() == session
     clear_session()
     assert load_session() is None
+
+
+def test_session_state_roundtrip_with_hidden_dm_ids(tmp_path, monkeypatch) -> None:
+    state_file = tmp_path / "session.json"
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(state_file))
+    session = SessionState(
+        base_url="https://kilogram.example",
+        token="kgm_public.secret",
+        user_id=42,
+        username="alice",
+        hidden_dm_ids=frozenset({20, 30}),
+    )
+
+    save_session(session)
+
+    assert load_session() == session
+
+
+def test_session_state_loads_legacy_file_without_hidden_dm_ids(tmp_path, monkeypatch) -> None:
+    state_file = tmp_path / "session.json"
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(state_file))
+    state_file.write_text(
+        """
+{
+  "base_url": "https://kilogram.example",
+  "token": "kgm_public.secret",
+  "user_id": 42,
+  "username": "alice"
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    assert load_session() == SessionState(
+        base_url="https://kilogram.example",
+        token="kgm_public.secret",
+        user_id=42,
+        username="alice",
+    )
 
 
 @pytest.mark.parametrize(
@@ -136,8 +175,11 @@ async def test_register_auth_panel_contains_controls(monkeypatch, tmp_path) -> N
 
 
 class FakeAPI:
+    def __init__(self, dms=None) -> None:
+        self.dms = dms or []
+
     async def list_dms(self):
-        return []
+        return self.dms
 
     async def close(self) -> None:
         return None
@@ -222,6 +264,186 @@ async def test_message_rerender_keeps_single_dom_node_per_message(monkeypatch, t
             first_message.id: first_message,
             sent_message.id: sent_message,
         }
+
+
+async def test_incoming_unknown_dm_event_adds_dm_to_sidebar(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
+    app = KilogramTUI()
+    incoming_dm = DirectMessage(
+        id=20,
+        peer_user_id=2,
+        created_at="2026-05-04T00:00:00Z",
+        peer=PublicUser(id=2, username="bob", display_name="Bob Builder"),
+    )
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")
+        app.api = FakeAPI(dms=[incoming_dm])
+        await app.push_screen(MainScreen())
+        await pilot.pause()
+        app.dms.clear()
+        await app.render_dms()
+
+        await app.handle_ws_event(
+            {
+                "type": "message.created",
+                "data": {
+                    "id": 100,
+                    "dm_id": incoming_dm.id,
+                    "author_id": 2,
+                    "content": "hello alice",
+                    "created_at": "2026-05-04T00:00:01Z",
+                    "edited_at": None,
+                },
+            }
+        )
+        await pilot.pause()
+
+        assert app.dms[incoming_dm.id].title == "Bob Builder (bob)"
+        assert app.active_dm is None
+        dm_items = list(app.screen.query(DMListItem))
+        assert len(dm_items) == 1
+        assert dm_items[0].dm == incoming_dm
+
+
+async def test_close_dm_hides_sidebar_item_but_keeps_dm_state(monkeypatch, tmp_path) -> None:
+    state_file = tmp_path / "session.json"
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(state_file))
+    app = KilogramTUI()
+    dm = DirectMessage(id=20, peer_user_id=2, created_at="2026-05-04T00:00:00Z")
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")
+        app.api = FakeAPI(dms=[dm])
+        await app.push_screen(MainScreen())
+        await pilot.pause()
+        app.dms = {dm.id: dm}
+        await app.render_dms()
+
+        await app.close_dm(dm.id)
+        await pilot.pause()
+
+        assert app.dms[dm.id] == dm
+        assert dm.id in app.hidden_dm_ids
+        assert list(app.screen.query(DMListItem)) == []
+        assert load_session().hidden_dm_ids == frozenset({dm.id})
+
+
+async def test_close_active_dm_clears_chat(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "session.json"))
+    app = KilogramTUI()
+    dm = DirectMessage(id=20, peer_user_id=2, created_at="2026-05-04T00:00:00Z")
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")
+        app.api = FakeAPI(dms=[dm])
+        await app.push_screen(MainScreen())
+        await pilot.pause()
+        app.dms = {dm.id: dm}
+        app.active_dm = dm
+        app.messages = [Message(10, dm.id, 1, "active", "2026-05-04T00:00:00Z")]
+        await app.render_messages()
+
+        await app.close_dm(dm.id)
+        await pilot.pause()
+
+        assert app.active_dm is None
+        assert app.messages == []
+        assert app.next_before is None
+        assert app.dms[dm.id] == dm
+
+
+async def test_open_user_dm_unhides_closed_dm(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "session.json"))
+    app = KilogramTUI()
+    user = PublicUser(id=2, username="bob", display_name="Bob Builder")
+    dm = DirectMessage(
+        id=20,
+        peer_user_id=user.id,
+        created_at="2026-05-04T00:00:00Z",
+        peer=user,
+    )
+
+    class OpenFakeAPI(FakeAPI):
+        async def open_dm(self, recipient_id, peer=None):
+            return dm
+
+        async def message_history(self, dm_id):
+            return MessagePage(items=[], next_before=None)
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")
+        app.api = OpenFakeAPI(dms=[dm])
+        await app.push_screen(MainScreen())
+        await pilot.pause()
+        app.dms = {dm.id: dm}
+        app.hidden_dm_ids = {dm.id}
+
+        await app.open_user_dm(user)
+        await pilot.pause()
+
+        assert dm.id not in app.hidden_dm_ids
+        assert app.active_dm == dm
+        assert list(app.screen.query(DMListItem))[0].dm == dm
+
+
+async def test_incoming_message_unhides_closed_dm(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "session.json"))
+    app = KilogramTUI()
+    dm = DirectMessage(id=20, peer_user_id=2, created_at="2026-05-04T00:00:00Z")
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")
+        app.api = FakeAPI(dms=[dm])
+        await app.push_screen(MainScreen())
+        await pilot.pause()
+        app.dms = {dm.id: dm}
+        app.hidden_dm_ids = {dm.id}
+        await app.render_dms()
+
+        await app.handle_message_created_event(
+            Message(10, dm.id, 2, "hello", "2026-05-04T00:00:00Z")
+        )
+        await pilot.pause()
+
+        assert dm.id not in app.hidden_dm_ids
+        assert list(app.screen.query(DMListItem))[0].dm == dm
+
+
+async def test_incoming_known_inactive_dm_does_not_touch_active_messages(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("KILOGRAM_TUI_STATE", str(tmp_path / "missing.json"))
+    app = KilogramTUI()
+    active_dm = DirectMessage(id=20, peer_user_id=2, created_at="2026-05-04T00:00:00Z")
+    inactive_dm = DirectMessage(id=21, peer_user_id=3, created_at="2026-05-04T00:00:00Z")
+    active_message = Message(10, active_dm.id, 1, "active", "2026-05-04T00:00:00Z")
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        app.session = SessionState("http://127.0.0.1:8000", "token", 1, "alice")
+        app.api = FakeAPI(dms=[active_dm, inactive_dm])
+        await app.push_screen(MainScreen())
+        await pilot.pause()
+        app.dms = {active_dm.id: active_dm, inactive_dm.id: inactive_dm}
+        app.active_dm = active_dm
+        app.messages = [active_message]
+        await app.render_messages()
+
+        await app.handle_ws_event(
+            {
+                "type": "message.created",
+                "data": {
+                    "id": 100,
+                    "dm_id": inactive_dm.id,
+                    "author_id": 3,
+                    "content": "inactive",
+                    "created_at": "2026-05-04T00:00:01Z",
+                    "edited_at": None,
+                },
+            }
+        )
+        await pilot.pause()
+
+        assert app.messages == [active_message]
+        assert len(list(app.screen.query(".message-row"))) == 1
 
 
 async def test_logout_clears_session_and_returns_to_login(monkeypatch, tmp_path) -> None:
