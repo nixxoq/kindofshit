@@ -251,6 +251,25 @@ Button:disabled {
     padding: 0 1;
 }
 
+.msg-header {
+    width: 100%;
+    height: 1;
+}
+
+.msg-author {
+    width: 1fr;
+}
+
+.msg-time {
+    width: auto;
+    content-align: right middle;
+}
+
+.msg-content {
+    width: 100%;
+    height: auto;
+}
+
 .own-message {
     color: #d8fff4;
 }

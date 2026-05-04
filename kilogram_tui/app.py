@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 import os
 from pathlib import Path
 from typing import cast
@@ -52,29 +53,61 @@ class DMCloseButton(Button):
         event.stop()
 
 
-class MessageWidget(Static):
+class MessageWidget(Container):
     def __init__(self, message: Message, current_user_id: int) -> None:
+        super().__init__(classes="message-row")
         self.message = message
         self.current_user_id = current_user_id
-        author = (
-            "me"
-            if message.author_id == current_user_id
-            else f"{message.author.display_name} ({message.author.username})"
-        )
-        edited = " [#9e4197 italic](edited)[/]" if message.edited_at else ""
-        super().__init__(
-            f"{author}{edited}\n{message.content}",
-            classes="message-row",
-        )
         if message.author_id == current_user_id:
             self.add_class("own-message")
+
+    def get_relative_time(self, dt) -> str:
+        if isinstance(dt, str):
+            try:
+                dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+            except ValueError:
+                return dt[11:16]
+
+        dt = dt.astimezone()
+        now = datetime.now().astimezone()
+        days = (now.date() - dt.date()).days
+        ts = dt.strftime("%H:%M")
+
+        if days == 0:
+            s = max(0, (now - dt).total_seconds())
+            if s < 60:
+                return "just now"
+            if s < 3600:
+                return f"{int(s // 60)} minute{'s' * (s >= 120)} ago"
+            return f"{int(s // 3600)} hour{'s' * (s >= 7200)} ago"
+
+        return f"yesterday at {ts}" if days == 1 else f"{dt.strftime('%b %d')} at {ts}"
+
+    def compose(self) -> ComposeResult:
+        is_me = self.message.author_id == self.current_user_id
+        author = (
+            "me"
+            if is_me
+            else f"{self.message.author.display_name} ({self.message.author.username})"
+        )
+
+        ed = (
+            f" [#9e4197 italic](edited {self.get_relative_time(self.message.edited_at)})[/]"
+            if self.message.edited_at
+            else ""
+        )
+        ts = self.get_relative_time(self.message.created_at)
+
+        with Horizontal(classes="msg-header"):
+            yield Static(f"{author}{ed}", classes="msg-author")
+            yield Static(f"[italic #806070]{ts}[/]", classes="msg-time")
+
+        yield Static(self.message.content, classes="msg-content")
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
         if event.button == 3:
             cast(KilogramTUI, self.app).show_message_context(
-                self.message,
-                int(event.screen_x or 0),
-                int(event.screen_y or 0),
+                self.message, int(event.screen_x or 0), int(event.screen_y or 0)
             )
             event.stop()
 
