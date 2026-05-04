@@ -113,9 +113,12 @@ async def list_messages(
     if before is not None:
         query = query.filter(id__lt=before)
 
-    messages = await query.prefetch_related("author").limit(limit)
+    messages = await query.prefetch_related("author").limit(limit + 1)
+    has_more = len(messages) > limit
+    messages = messages[:limit]
+
     items = [serialize_message(message, message.author) for message in messages]
-    next_before = messages[-1].id if messages else None
+    next_before = messages[-1].id if has_more and messages else None
     return MessageHistoryResponse(items=items, next_before=next_before)
 
 
