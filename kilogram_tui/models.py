@@ -4,6 +4,21 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class MessageAuthor:
+    id: int
+    username: str
+    display_name: str
+
+    @classmethod
+    def from_json(cls, data: dict) -> "MessageAuthor":
+        return cls(
+            id=int(data["id"]),
+            username=str(data["username"]),
+            display_name=str(data["display_name"]),
+        )
+
+
+@dataclass(frozen=True)
 class SessionState:
     base_url: str
     token: str
@@ -59,6 +74,7 @@ class Message:
     id: int
     dm_id: int
     author_id: int
+    author: MessageAuthor
     content: str
     created_at: str
     edited_at: str | None = None
@@ -69,6 +85,7 @@ class Message:
             id=int(data["id"]),
             dm_id=int(data["dm_id"]),
             author_id=int(data["author_id"]),
+            author=MessageAuthor.from_json(data["author"]),
             content=str(data["content"]),
             created_at=str(data["created_at"]),
             edited_at=data.get("edited_at"),

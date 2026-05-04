@@ -11,7 +11,12 @@ from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, ListItem, ListView, Static
 
-from kilogram_tui.api import DEFAULT_BASE_URL, KilogramAPI, KilogramAPIError, UnauthorizedError
+from kilogram_tui.api import (
+    DEFAULT_BASE_URL,
+    KilogramAPI,
+    KilogramAPIError,
+    UnauthorizedError,
+)
 from kilogram_tui.models import DirectMessage, Message, PublicUser, SessionState
 from kilogram_tui.state import clear_session, load_session, save_session
 from kilogram_tui.ws import WebSocketListener
@@ -20,7 +25,9 @@ from kilogram_tui.ws import WebSocketListener
 class UserListItem(ListItem):
     def __init__(self, user: PublicUser) -> None:
         self.user = user
-        super().__init__(Label(f"{user.display_name} @{user.username}"), classes="list-row")
+        super().__init__(
+            Label(f"{user.display_name} @{user.username}"), classes="list-row"
+        )
 
 
 class DMListItem(ListItem):
@@ -44,13 +51,13 @@ class DMCloseButton(Button):
     async def on_click(self, event: events.Click) -> None:
         event.stop()
         await cast(KilogramTUI, self.app).close_dm(self.dm_id)
-        
+
 
 class MessageWidget(Static):
     def __init__(self, message: Message, current_user_id: int) -> None:
         self.message = message
         self.current_user_id = current_user_id
-        author = "me" if message.author_id == current_user_id else f"user:{message.author_id}"
+        author = "me" if message.author_id == current_user_id else f"{message.author.display_name} ({message.author.username})"
         edited = " edited" if message.edited_at else ""
         super().__init__(
             f"{author}{edited}\n{message.content}",
@@ -147,7 +154,9 @@ class RegisterScreen(AuthScreen):
                 yield Static("k1LLOgr4m", id="brand")
                 yield Input(placeholder="username", id="register-username")
                 yield Input(placeholder="display_name", id="register-display-name")
-                yield Input(placeholder="password", password=True, id="register-password")
+                yield Input(
+                    placeholder="password", password=True, id="register-password"
+                )
                 yield Button("register", id="register-submit")
                 yield Button("login", id="register-login")
                 yield Static("", id="auth-status")
@@ -227,7 +236,7 @@ class MainScreen(Screen):
             await app.submit_composer()
         elif event.button.id == "logout-button":
             await app.logout()
-        #elif isinstance(event.button, DMCloseButton):
+        # elif isinstance(event.button, DMCloseButton):
         #    await app.close_dm(event.button.dm_id)
         #    event.stop()
         elif event.button.id == "load-older":
@@ -375,7 +384,9 @@ class KilogramTUI(App):
         elif event_type == "message.updated":
             await self.apply_message_updated(Message.from_json(data))
         elif event_type == "message.deleted":
-            await self.apply_message_deleted(int(data["dm_id"]), int(data["message_id"]))
+            await self.apply_message_deleted(
+                int(data["dm_id"]), int(data["message_id"])
+            )
 
     async def handle_message_created_event(self, message: Message) -> None:
         if message.dm_id not in self.dms:
@@ -579,7 +590,9 @@ class KilogramTUI(App):
     async def apply_message_deleted(self, dm_id: int, message_id: int) -> None:
         if self.active_dm is None or dm_id != self.active_dm.id:
             return
-        self.messages = [message for message in self.messages if message.id != message_id]
+        self.messages = [
+            message for message in self.messages if message.id != message_id
+        ]
         await self.render_messages()
 
     def upsert_message(self, message: Message) -> None:
@@ -590,12 +603,16 @@ class KilogramTUI(App):
         self.messages.append(message)
 
     def show_message_context(self, message: Message, x: int, y: int) -> None:
-        can_edit = self.session is not None and message.author_id == self.session.user_id
+        can_edit = (
+            self.session is not None and message.author_id == self.session.user_id
+        )
         x, y = self.clamp_context_menu_position(x, y)
         menu = self.context_menu
         if menu is None:
             existing_menus = list(self.screen.query("#message-context-menu"))
-            menu = cast(MessageContextMenu | None, existing_menus[0] if existing_menus else None)
+            menu = cast(
+                MessageContextMenu | None, existing_menus[0] if existing_menus else None
+            )
 
         if menu is not None:
             menu.retarget(message, can_edit, x, y)
