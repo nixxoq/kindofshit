@@ -93,38 +93,40 @@ async def list_messages(
     return MessageHistoryResponse(items=items, next_before=next_before)
 
 
-async def delete_message(dm: DirectMessage, author: User, message_id: int):
+async def delete_message(dm: DirectMessage, author: User, message_id: int) -> dict:
     message = await Message.get_or_none(id=message_id, dm_id=dm.id)
 
-    if message is None:
-        return {"error" : "message is not found"}
-    
+    if not message:
+        return {"error": "message_not_found"}
+
     if message.author_id != author.id:
-        return {"error" : "wrong author"}
-    
+        return {"error": "forbidden"}
+
     await message.delete()
+
+    dm.updated_at = timezone.now()
     await dm.save(update_fields=["updated_at"])
-    await dm.refresh_from_db()
 
-    return {
-        "status" : "ok",
-        "updated_at" : dm.updated_at
-        }
+    return {"status": "ok"}
 
 
-async def edit_message(dm: DirectMessage, author: User, message_id: int, new_content: str):
+async def edit_message(
+    dm: DirectMessage, author: User, message_id: int, new_content: str
+) -> dict:
     message = await Message.get_or_none(id=message_id, dm_id=dm.id)
 
     if message is None:
-        return {"error" : "message is not found"}
-    
-    if message.author_id != author.id:
-        return {"error" : "wrong author"}
+        return {"error": "message_not_found"}
 
-    old_content = decrypt_message_text(message.ciphertext, message.nonce, message.key_version)
-    if (new_content == old_content):
-        return serialize_message(message)
-   
+    if message.author_id != author.id:
+        return {"error": "forbidden"}
+
+    old_content = decrypt_message_text(
+        message.ciphertext, message.nonce, message.key_version
+    )
+    if new_content == old_content:
+        return {"status": "ok", "message": serialize_message(message)}
+
     ciphertext, nonce, key_version = encrypt_message_text(new_content)
 
     message.ciphertext = ciphertext
@@ -132,7 +134,11 @@ async def edit_message(dm: DirectMessage, author: User, message_id: int, new_con
     message.key_version = key_version
     message.edited_at = timezone.now()
 
-    await message.save(update_fields=["ciphertext", "nonce", "key_version", "edited_at"])
+    await message.save(
+        update_fields=["ciphertext", "nonce", "key_version", "edited_at"]
+    )
 
-    return serialize_message(message)
-    
+    dm.updated_at = timezone.now()
+    await dm.save(update_fields=["updated_at"])
+
+    return {"status": "ok", "message": serialize_message(message)}
