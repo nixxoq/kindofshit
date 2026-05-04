@@ -90,3 +90,22 @@ async def list_messages(
     items = [serialize_message(message) for message in messages]
     next_before = messages[-1].id if messages else None
     return MessageHistoryResponse(items=items, next_before=next_before)
+
+
+async def delete_message(dm: DirectMessage, author: User, message_id: int):
+    message = await Message.get_or_none(id=message_id, dm_id=dm.id)
+
+    if message is None:
+        return {"error" : "message is not found"}
+    
+    if message.author_id != author.id:
+        return {"error" : "wrong author"}
+    
+    await message.delete()
+    await dm.save(update_fields=["updated_at"])
+    await dm.refresh_from_db()
+
+    return {
+        "status" : "ok",
+        "updated_at" : dm.updated_at
+        }
