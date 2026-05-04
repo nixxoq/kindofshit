@@ -156,6 +156,7 @@ Button:disabled {
     height: 1fr;
     margin-top: 1;
     background: transparent;
+    border: solid $kgm-line;
 }
 
 #chat-column {
