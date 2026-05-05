@@ -12,6 +12,7 @@ dependencies = [
     "httpx>=0.28.0",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
+    "redis>=7.4.0",
     "textual>=6.0.0",
     "tortoise-orm>=1.1.7",
     "tzdata>=2026.2",

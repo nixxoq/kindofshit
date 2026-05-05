@@ -211,3 +211,6 @@ __marimo__/
 .codex/
 .agents/
 test.sqlite3
+
+*.old
+*.patch

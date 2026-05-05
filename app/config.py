@@ -19,6 +19,7 @@ class Settings:
     app_name: str
     debug: bool
     database_url: str
+    redis_url: str
     secret_key: str
     auth_token_secret: str
     auto_generate_schema: bool
@@ -60,13 +61,18 @@ def get_settings() -> Settings:
     secret_key = os.getenv("SECRET_KEY", _dev_key("kilogram-dev-message-key"))
     auth_token_secret = os.getenv("AUTH_TOKEN_SECRET", secret_key)
 
+    db_url = os.getenv(
+        "DATABASE_URL",
+        "postgres://kilogram:kilogram@127.0.0.1:5432/kilogram",
+    )
+    if "?" not in db_url:
+        db_url += "?min_size=10&max_size=50"
+
     return Settings(
         app_name=os.getenv("APP_NAME", "Kilogram"),
         debug=debug,
-        database_url=os.getenv(
-            "DATABASE_URL",
-            "postgres://kilogram:kilogram@127.0.0.1:5432/kilogram",
-        ),
+        database_url=db_url,
+        redis_url=os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"),
         secret_key=secret_key,
         auth_token_secret=auth_token_secret,
         auto_generate_schema=_as_bool(os.getenv("AUTO_GENERATE_SCHEMA"), False),

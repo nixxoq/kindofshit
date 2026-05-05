@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from typing import cast
 
-from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 from tortoise import timezone
 
@@ -16,6 +16,7 @@ from app.schemas.message import (
 )
 from app.services.crypto import decrypt_message_text, encrypt_message_text
 from app.utils import MessageError
+from app.services.websocket import connection_manager
 
 
 def normalize_dm_pair(user_a_id: int, user_b_id: int) -> tuple[int, int]:
@@ -28,14 +29,8 @@ async def get_user_or_none(user_id: int) -> User | None:
 
 async def open_or_create_dm(current_user: User, recipient: User) -> DirectMessage:
     low_id, high_id = normalize_dm_pair(current_user.id, recipient.id)
-    dm = await DirectMessage.get_or_none(user_low_id=low_id, user_high_id=high_id)
-    if dm is not None:
-        return dm
-
-    try:
-        return await DirectMessage.create(user_low_id=low_id, user_high_id=high_id)
-    except IntegrityError:
-        return await DirectMessage.get(user_low_id=low_id, user_high_id=high_id)
+    dm, _ = await DirectMessage.get_or_create(user_low_id=low_id, user_high_id=high_id)
+    return dm
 
 
 async def list_dms_for_user(user_id: int) -> list[DirectMessage]:
@@ -47,11 +42,39 @@ async def list_dms_for_user(user_id: int) -> list[DirectMessage]:
 
 
 async def get_dm_by_id(dm_id: int) -> DirectMessage | None:
-    return await DirectMessage.get_or_none(id=dm_id)
+    r = connection_manager._redis
+    if r:
+        cached = await r.get(f"dm_meta:{dm_id}")
+        if cached:
+            data = json.loads(cached)
+            return DirectMessage(
+                id=dm_id, user_low_id=data["l"], user_high_id=data["h"]
+            )
+
+    dm = await DirectMessage.get_or_none(id=dm_id)
+    if dm and r:
+        await r.setex(
+            f"dm_meta:{dm_id}",
+            600,
+            json.dumps({"l": dm.user_low_id, "h": dm.user_high_id}),
+        )
+    return dm
 
 
 def is_dm_participant(dm: DirectMessage, user_id: int) -> bool:
-    return user_id in {dm.user_low_id, dm.user_high_id}
+    return user_id == dm.user_low_id or user_id == dm.user_high_id
+
+
+async def _throttle_dm_update(dm_id: int) -> None:
+    r = connection_manager._redis
+    if not r:
+        await DirectMessage.filter(id=dm_id).update(updated_at=timezone.now())
+        return
+
+    lock_key = f"dm_upd_lock:{dm_id}"
+    if not await r.exists(lock_key):
+        await r.setex(lock_key, 10, "1")
+        await DirectMessage.filter(id=dm_id).update(updated_at=timezone.now())
 
 
 def serialize_public_user(user: User) -> UserPublicResponse:
@@ -102,7 +125,7 @@ async def create_message(dm: DirectMessage, author: User, content: str) -> Messa
         nonce=nonce,
         key_version=key_version,
     )
-    await dm.save(update_fields=["updated_at"])
+    await _throttle_dm_update(dm.id)
     return message
 
 
@@ -124,17 +147,15 @@ async def list_messages(
 
 async def delete_message(dm: DirectMessage, author: User, message_id: int) -> dict:
     message = await Message.get_or_none(id=message_id, dm_id=dm.id)
-
-    if not message:
-        return {"error": MessageError.MESSAGE_NOT_FOUND}
-
-    if message.author_id != author.id:
-        return {"error": MessageError.FORBIDDEN}
+    if not message or message.author_id != author.id:
+        return {
+            "error": (
+                MessageError.FORBIDDEN if message else MessageError.MESSAGE_NOT_FOUND
+            )
+        }
 
     await message.delete()
-    dm.updated_at = timezone.now()
-
-    await dm.save(update_fields=["updated_at"])
+    await _throttle_dm_update(dm.id)
     return {"status": "ok"}
 
 
@@ -142,31 +163,21 @@ async def edit_message(
     dm: DirectMessage, author: User, message_id: int, new_content: str
 ) -> dict:
     message = await Message.get_or_none(id=message_id, dm_id=dm.id)
-
-    if not message:
-        return {"error": MessageError.MESSAGE_NOT_FOUND}
-
-    if message.author_id != author.id:
-        return {"error": MessageError.FORBIDDEN}
-
-    old_content = decrypt_message_text(
-        message.ciphertext, message.nonce, message.key_version
-    )
-    if new_content == old_content:
-        return {"status": "ok", "message": serialize_message(message, author)}
+    if not message or message.author_id != author.id:
+        return {
+            "error": (
+                MessageError.FORBIDDEN if message else MessageError.MESSAGE_NOT_FOUND
+            )
+        }
 
     ciphertext, nonce, key_version = encrypt_message_text(new_content)
-
-    message.ciphertext = ciphertext
-    message.nonce = nonce
-    message.key_version = key_version
-    message.edited_at = timezone.now()
-
-    await message.save(
-        update_fields=["ciphertext", "nonce", "key_version", "edited_at"]
+    await Message.filter(id=message_id).update(
+        ciphertext=ciphertext,
+        nonce=nonce,
+        key_version=key_version,
+        edited_at=timezone.now(),
     )
+    await _throttle_dm_update(dm.id)
 
-    dm.updated_at = timezone.now()
-    await dm.save(update_fields=["updated_at"])
-
-    return {"status": "ok", "message": serialize_message(message, author)}
+    updated_message = await Message.get(id=message_id)
+    return {"status": "ok", "message": serialize_message(updated_message, author)}

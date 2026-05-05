@@ -1,6 +1,28 @@
 services:
+  redis:
+    image: redis:8-alpine
+    command: redis-server --maxclients 20000
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
+    command: >
+      postgres 
+      -c max_connections=500 
+      -c shared_buffers=512MB 
+      -c effective_cache_size=1536MB 
+      -c work_mem=16MB 
+      -c max_wal_size=2GB
     environment:
       POSTGRES_USER: kilogram
       POSTGRES_PASSWORD: kilogram
@@ -17,11 +39,14 @@ services:
 
   api:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 8 --backlog 2048
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     environment:
       DATABASE_URL: postgres://kilogram:kilogram@postgres:5432/kilogram
-      AUTO_GENERATE_SCHEMA: "true"
-      DEBUG: "true"
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     networks:
@@ -29,6 +54,8 @@ services:
       - backend
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

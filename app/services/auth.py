@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import secrets
+import json
 from dataclasses import dataclass
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from tortoise import timezone
+from tortoise.exceptions import IntegrityError
 
 from app.config import get_settings
 from app.db.models import AuthToken, User
 from app.schemas.account import AccountCreationRequest, LoginPayload
 from app.utils import AuthError
+from app.services.websocket import connection_manager
 
-ph = PasswordHasher()
+ph = PasswordHasher(time_cost=1, memory_cost=8192, parallelism=4)
 
 
 async def login(payload: LoginPayload) -> dict:
@@ -24,10 +28,10 @@ async def login(payload: LoginPayload) -> dict:
         return {"error": AuthError.USER_NOT_FOUND}
 
     try:
-        ph.verify(user.hashed_password, payload.password)
+        await asyncio.to_thread(ph.verify, user.hashed_password, payload.password)
 
-        if ph.check_needs_rehash(user.hashed_password):
-            user.hashed_password = ph.hash(payload.password)
+        if await asyncio.to_thread(ph.check_needs_rehash, user.hashed_password):
+            user.hashed_password = await asyncio.to_thread(ph.hash, payload.password)
             await user.save(update_fields=["hashed_password"])
 
         await AuthToken.filter(user=user, revoked_at__isnull=True).update(
@@ -48,17 +52,17 @@ async def login(payload: LoginPayload) -> dict:
 
 
 async def register(payload: AccountCreationRequest) -> dict:
-    if await User.exists(username=payload.username):
+    hashed = await asyncio.to_thread(ph.hash, payload.password)
+
+    try:
+        new_user = await User.create(
+            username=payload.username,
+            display_name=payload.display_name,
+            hashed_password=hashed,
+            is_test_user=False,
+        )
+    except IntegrityError:
         return {"error": AuthError.USER_EXISTS}
-
-    hashed = ph.hash(password=payload.password)
-
-    new_user = await User.create(
-        username=payload.username,
-        display_name=payload.display_name,
-        hashed_password=hashed,
-        is_test_user=False,
-    )
 
     token = await create_auth_token(new_user, name="Registration")
 
@@ -81,13 +85,25 @@ async def create_auth_token(user: User, name: str = "login") -> str:
     secret_part = secrets.token_urlsafe(32)
     raw_token = f"kgm_{public_id}.{secret_part}"
 
-    await AuthToken.create(
+    token_obj = await AuthToken.create(
         user=user,
         public_id=public_id,
         token_hash=hash_token(raw_token=raw_token),
         name=name,
         is_seed=False,
     )
+
+    r = connection_manager._redis
+    if r:
+        val = json.dumps(
+            {
+                "u_id": user.id,
+                "un": user.username,
+                "dn": user.display_name,
+                "t_id": token_obj.id,
+            }
+        )
+        await r.setex(f"session:{raw_token}", 600, val)
 
     return raw_token
 
@@ -132,8 +148,6 @@ async def authenticate_token(raw_token: str) -> AuthenticatedContext:
     if not hmac.compare_digest(token.token_hash, hash_token(raw_token)):
         raise ValueError("Invalid token")
 
-    token.last_used_at = timezone.now()
-    await token.save(update_fields=["last_used_at"])
     return AuthenticatedContext(user=token.user, token=token)
 
 
