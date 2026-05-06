@@ -82,6 +82,8 @@ def serialize_public_user(user: User) -> UserPublicResponse:
         id=user.id,
         username=user.username,
         display_name=user.display_name,
+        is_online=user.is_online,
+        last_seen=user.last_seen,
     )
 
 
