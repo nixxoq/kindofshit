@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from tortoise.expressions import Q
 
+from app.schemas.message import PinMessageRequest
+
 from app.api.dependencies import get_current_auth_context
 from app.db import healthcheck
 from app.db.models import User
@@ -224,6 +226,35 @@ async def update_message(
     await connection_manager.broadcast([dm.user_low_id, dm.user_high_id], event)
     return response_data
 
+@router.patch("/dms/{dm_id}/messages/{message_id}/pin", response_model=MessageResponse)
+async def toggle_pin_message(
+    dm_id: int,
+    message_id: int,
+    payload: PinMessageRequest,
+    auth: AuthenticatedContext = Depends(get_current_auth_context),
+) -> MessageResponse:
+    
+    dm = await get_dm_by_id(dm_id)
+
+    if not dm or not is_dm_participant(dm, auth.user.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="DM not found")
+
+    from app.db.models import Message as DBMessage
+    msg = await DBMessage.get_or_none(id=message_id, dm_id=dm.id).prefetch_related("author")
+    if not msg:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+    msg.is_pinned = payload.is_pinned
+    await msg.save(update_fields=["is_pinned"])
+
+    response_data = serialize_message(msg, auth.user)
+    event = {
+        "type": WSEventType.MESSAGE_UPDATED,
+        "data": response_data.model_dump(mode="json"),
+    }
+    await connection_manager.broadcast([dm.user_low_id, dm.user_high_id], event)
+    
+    return response_data
 
 @router.delete(
     "/dms/{dm_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT

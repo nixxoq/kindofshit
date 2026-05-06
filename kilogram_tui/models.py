@@ -84,6 +84,7 @@ class Message:
     content: str
     created_at: str
     edited_at: str | None = None
+    is_pinned: bool = False
 
     @classmethod
     def from_json(cls, data: dict) -> "Message":
@@ -95,6 +96,7 @@ class Message:
             content=str(data["content"]),
             created_at=str(data["created_at"]),
             edited_at=data.get("edited_at"),
+            is_pinned=bool(data.get("is_pinned", False)),
         )
 
 

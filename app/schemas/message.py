@@ -24,6 +24,7 @@ class MessageResponse(BaseModel):
     content: str
     created_at: datetime
     edited_at: Optional[datetime] = None
+    is_pinned: bool = False
 
 
 class MessageHistoryResponse(BaseModel):
@@ -33,3 +34,6 @@ class MessageHistoryResponse(BaseModel):
 
 class EditMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4096)
+
+class PinMessageRequest(BaseModel):
+    is_pinned: bool

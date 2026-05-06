@@ -16,6 +16,7 @@ class Message(BaseDB):
     nonce = fields.BinaryField()
     key_version = fields.IntField(default=1)
     edited_at = fields.DatetimeField(null=True)
+    is_pinned = fields.BooleanField(default=False)
 
     class Meta:
         table = "messages"

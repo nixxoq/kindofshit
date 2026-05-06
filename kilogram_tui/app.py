@@ -134,8 +134,9 @@ class MessageWidget(Container):
         )
         ts = self.get_relative_time(self.message.created_at)
 
+        pin_badge = " 📌" if self.message.is_pinned else ""
         with Horizontal(classes="msg-header"):
-            yield Static(f"{author}{ed}", classes="msg-author")
+            yield Static(f"{author}{ed}{pin_badge}", classes="msg-author")
             yield Static(f"[italic #806070]{ts}[/]", classes="msg-time")
 
         yield Static(self.message.content, classes="msg-content")
@@ -158,6 +159,7 @@ class MessageContextMenu(Container):
     def compose(self) -> ComposeResult:
         yield Button("EDIT", id="context-edit", disabled=not self.can_edit)
         yield Button("delete", id="context-delete", disabled=not self.can_edit)
+        yield Button("pin", id="context-pin")
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
         event.stop()
@@ -171,6 +173,12 @@ class MessageContextMenu(Container):
                 self.query_one(button_id, Button).disabled = not can_edit
             except Exception:
                 pass
+
+        try:
+            pin_btn = self.query_one("#context-pin", Button)
+            pin_btn.label = "unpin" if message.is_pinned else "pin"
+        except Exception:
+            pass
 
 
 class AuthScreen(Screen):
@@ -266,9 +274,11 @@ class MainScreen(Screen):
                         yield ListView(id="user-results")
                 with Vertical(id="chat-column"):
                     yield Static("", id="chat-title")
+                    yield Static("", id="pinned-message")
                     with VerticalScroll(id="messages"):
                         with Vertical(id="message-list"):
                             yield Static("select or search a chat", id="empty-chat")
+                
                     with Horizontal(id="composer-row"):
                         yield Input(placeholder="message", id="composer")
                         yield Button("send", id="send-message")
@@ -317,6 +327,8 @@ class MainScreen(Screen):
             app.begin_editing_context_message()
         elif event.button.id == "context-delete":
             await app.delete_context_message()
+        elif event.button.id == "context-pin":
+            await app.toggle_context_pin()
 
     async def on_list_view_selected(self, event: ListView.Selected) -> None:
         app = cast(KilogramTUI, self.app)
@@ -676,6 +688,18 @@ class KilogramTUI(App):
 
             self.screen.query_one("#chat-title", Static).update(title)
 
+            pinned_msg = next((m for m in reversed(self.messages) if m.is_pinned), None)
+            pinned_widget = self.screen.query_one("#pinned-message", Static)
+
+            if pinned_msg:
+                content = pinned_msg.content.replace('\n', ' ')
+                if len(content) > 70:
+                    content = content[:67] + "..."
+                pinned_widget.update(f"📌 [bold]{pinned_msg.author.display_name}[/]: {content}")
+                pinned_widget.styles.display = "block"
+            else:
+                pinned_widget.styles.display = "none"
+
             message_list = self.screen.query_one("#message-list", Vertical)
             await message_list.remove_children()
             if self.next_before is not None:
@@ -797,6 +821,21 @@ class KilogramTUI(App):
             assert self.api is not None
             await self.api.delete_message(self.active_dm.id, message.id)
             await self.apply_message_deleted(self.active_dm.id, message.id)
+
+        await self.with_unauthorized_handling(action)
+
+    async def toggle_context_pin(self) -> None:
+        if self.context_menu is None or self.active_dm is None:
+            return
+        message = self.context_menu.message
+        self.close_message_context()
+
+        async def action() -> None:
+            assert self.api is not None
+            updated_msg = await self.api.toggle_pin_message(
+                self.active_dm.id, message.id, not message.is_pinned
+            )
+            await self.apply_message_updated(updated_msg)
 
         await self.with_unauthorized_handling(action)
 

@@ -171,3 +171,11 @@ class KilogramAPI:
 
     async def delete_message(self, dm_id: int, message_id: int) -> None:
         await self._request("DELETE", f"/api/dms/{dm_id}/messages/{message_id}")
+
+    async def toggle_pin_message(self, dm_id: int, message_id: int, is_pinned: bool) -> Message:
+        response = await self._request(
+            "PATCH",
+            f"/api/dms/{dm_id}/messages/{message_id}/pin",
+            json={"is_pinned": is_pinned},
+        )
+        return Message.from_json(response.json())

@@ -115,6 +115,7 @@ def serialize_message(message: Message, author: User) -> MessageResponse:
         ),
         created_at=message.created_at,
         edited_at=message.edited_at,
+        is_pinned=message.is_pinned
     )
 
 

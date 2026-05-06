@@ -277,7 +277,7 @@ Button:disabled {
 #message-context-menu {
     layer: overlay;
     width: 18;
-    height: 10;
+    height: auto;
     background: $kgm-panel-dark;
     border: solid $kgm-line;
     padding: 1;
@@ -288,4 +288,14 @@ Button:disabled {
     height: 3;
     min-width: 0;
     margin-bottom: 0;
+}
+
+#pinned-message {
+    background: #3c2340;
+    color: #e0e0e0;
+    padding: 0 1;
+    border-bottom: tall #6c3b75;
+    height: 3;
+    content-align: center middle;
+    display: none;
 }
