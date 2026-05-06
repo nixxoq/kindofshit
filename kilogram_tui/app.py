@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import cast
 
 from textual import events
+from textual.events import AppFocus, AppBlur
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, ListItem, ListView, Static
+
 
 from kilogram_tui.api import (
     DEFAULT_BASE_URL,
@@ -21,6 +23,48 @@ from kilogram_tui.api import (
 from kilogram_tui.models import DirectMessage, Message, PublicUser, SessionState
 from kilogram_tui.state import clear_session, load_session, save_session
 from kilogram_tui.ws import WebSocketListener
+
+
+def get_ru_plural(n: int, form1: str, form2: str, form5: str) -> str:
+    n = abs(n) % 100
+    n1 = n % 10
+    if 10 < n < 20: return form5
+    if 1 < n1 < 5: return form2
+    if n1 == 1: return form1
+    return form5
+
+
+def format_user_status(user: PublicUser) -> str:
+    if user.is_online:
+        return "[bold green]online[/bold green]"
+    
+    if not user.last_seen:
+        return "[italic #806070]last seen recently[/]"
+        
+    try:
+        dt = datetime.fromisoformat(user.last_seen.replace("Z", "+00:00")).astimezone()
+    except ValueError:
+        return "[italic #806070]last seen recently[/]"
+        
+    now = datetime.now().astimezone()
+    diff_seconds = max(0, (now - dt).total_seconds())
+
+    if diff_seconds < 60:
+        return "[italic #806070]last seen just now[/]"
+        
+    minutes = int(diff_seconds // 60)
+    if minutes < 60:
+        word = "minute" if minutes == 1 else "minutes"
+        return f"[italic #806070]last seen {minutes} {word} ago[/]"
+        
+    hours = int(minutes // 60)
+    if hours < 24:
+        word = "hour" if hours == 1 else "hours"
+        return f"[italic #806070]last seen {hours} {word} ago[/]"
+        
+    days = int(hours // 24)
+    word = "day" if days == 1 else "days"
+    return f"[italic #806070]last seen {days} {word} ago[/]"
 
 
 class UserListItem(ListItem):
@@ -34,6 +78,7 @@ class UserListItem(ListItem):
 class DMListItem(ListItem):
     def __init__(self, dm: DirectMessage) -> None:
         self.dm = dm
+        status = "[bold green]●[/] " if dm.peer and dm.peer.is_online else ""
         super().__init__(
             Horizontal(
                 Label(dm.title, classes="dm-title"),
@@ -424,6 +469,62 @@ class KilogramTUI(App):
                 int(data["dm_id"]), int(data["message_id"])
             )
 
+        elif event_type == "user.status_updated":
+            await self.handle_status_updated(data)
+        
+        async def on_app_focus(self, event: AppFocus) -> None:
+            if self.ws_listener is not None:
+                await self.ws_listener.send_json({"type": "status_update", "data": {"is_online": True}})
+
+        async def on_app_blur(self, event: AppBlur) -> None:
+            if self.ws_listener is not None:
+                await self.ws_listener.send_json({"type": "status_update", "data": {"is_online": False}})
+
+        async def handle_status_updated(self, data: dict) -> None:
+            user_id = data["user_id"]
+            is_online = data["is_online"]
+            last_seen = data["last_seen"]
+
+            needs_render_dms = False
+
+            for dm in self.dms.values():
+                if dm.peer and dm.peer.id == user_id:
+                    new_peer = PublicUser(
+                        id=dm.peer.id,
+                        username=dm.peer.username,
+                        display_name=dm.peer.display_name,
+                        is_online=is_online,
+                        last_seen=last_seen
+                    )
+                    self.dms[dm.id] = DirectMessage(
+                        id=dm.id,
+                        peer_user_id=dm.peer_user_id,
+                        created_at=dm.created_at,
+                        peer=new_peer
+                    )
+                    needs_render_dms = True
+                    if self.active_dm and self.active_dm.id == dm.id:
+                        self.active_dm = self.dms[dm.id]
+
+            needs_render_search = False
+            for i, user in enumerate(self.search_results):
+                if user.id == user_id:
+                    self.search_results[i] = PublicUser(
+                        id=user.id,
+                        username=user.username,
+                        display_name=user.display_name,
+                        is_online=is_online,
+                        last_seen=last_seen
+                    )
+                    needs_render_search = True
+
+            if needs_render_dms:
+                await self.render_dms()
+                await self.render_messages() 
+
+            if needs_render_search and isinstance(self.screen, MainScreen):
+                await self.render_user_results(self.search_results)
+
     async def handle_message_created_event(self, message: Message) -> None:
         if message.dm_id not in self.dms:
             await self.refresh_dms()
@@ -571,8 +672,16 @@ class KilogramTUI(App):
         async with self.render_messages_lock:
             if not isinstance(self.screen, MainScreen) or self.session is None:
                 return
-            title = self.active_dm.title if self.active_dm is not None else ""
+            
+            title = ""
+            if self.active_dm is not None:
+                title = self.active_dm.title
+                if self.active_dm.peer:
+                    status_text = format_user_status(self.active_dm.peer)
+                    title = f"{title}  ·  {status_text}"
+            
             self.screen.query_one("#chat-title", Static).update(title)
+
             message_list = self.screen.query_one("#message-list", Vertical)
             await message_list.remove_children()
             if self.next_before is not None:

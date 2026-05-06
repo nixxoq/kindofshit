@@ -32,3 +32,5 @@ class UserPublicResponse(BaseModel):
     id: int
     username: str
     display_name: str
+    is_online: bool = False
+    last_seen: datetime | None = None

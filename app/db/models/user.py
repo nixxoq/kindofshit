@@ -11,5 +11,8 @@ class User(BaseDB):
     is_test_user = fields.BooleanField(default=True)
     hashed_password = fields.CharField(description="hash salt", max_length=256)
 
+    is_online = fields.BooleanField(default=False)
+    last_seen = fields.DatetimeField(null=True)
+
     class Meta:
         table = "users"
