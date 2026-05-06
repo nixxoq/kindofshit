@@ -183,7 +183,7 @@ async def send_message(
         )
 
     message = await create_message(dm, auth.user, payload.content)
-    response = serialize_message(message, auth.user)
+    response = await serialize_message(message)
     event = {
         "type": WSEventType.MESSAGE_CREATED,
         "data": response.model_dump(mode="json"),
@@ -247,7 +247,7 @@ async def toggle_pin_message(
     msg.is_pinned = payload.is_pinned
     await msg.save(update_fields=["is_pinned"])
 
-    response_data = serialize_message(msg, auth.user)
+    response_data = await serialize_message(msg)
     event = {
         "type": WSEventType.MESSAGE_UPDATED,
         "data": response_data.model_dump(mode="json"),

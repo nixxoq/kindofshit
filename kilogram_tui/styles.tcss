@@ -291,11 +291,27 @@ Button:disabled {
 }
 
 #pinned-message {
-    background: #3c2340;
-    color: #e0e0e0;
-    padding: 0 1;
-    border-bottom: tall #6c3b75;
-    height: 3;
-    content-align: center middle;
     display: none;
+    margin: 0 0 1 0;
+    padding: 0 2;
+    height: 5;
+    overflow-y: auto;
+    background: #3f0b3a;
+    border: solid $kgm-hot;
+}
+#pinned-title {
+    height: 1;
+    margin: 0;
+    padding: 0;
+
+    color: #ffd36b;
+    text-style: bold;
+}
+
+#pinned-body {
+    height: 1;
+    margin: 0;
+    padding: 0;
+
+    color: $kgm-text;
 }

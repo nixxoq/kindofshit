@@ -100,22 +100,26 @@ async def serialize_dm(dm: DirectMessage, current_user_id: int) -> DMResponse:
     )
 
 
-def serialize_message(message: Message, author: User) -> MessageResponse:
+async def serialize_message(message: Message) -> MessageResponse:
+    await message.fetch_related("author")
+
     return MessageResponse(
         id=message.id,
         dm_id=message.dm_id,
         author_id=message.author_id,
         author=MessageAuthorResponse(
-            id=author.id,
-            username=author.username,
-            display_name=author.display_name,
+            id=message.author.id,
+            username=message.author.username,
+            display_name=message.author.display_name,
         ),
         content=decrypt_message_text(
-            message.ciphertext, message.nonce, message.key_version
+            message.ciphertext,
+            message.nonce,
+            message.key_version,
         ),
         created_at=message.created_at,
         edited_at=message.edited_at,
-        is_pinned=message.is_pinned
+        is_pinned=message.is_pinned,
     )
 
 
@@ -143,7 +147,7 @@ async def list_messages(
     has_more = len(messages) > limit
     messages = messages[:limit]
 
-    items = [serialize_message(message, message.author) for message in messages]
+    items = [await serialize_message(message) for message in messages]
     next_before = messages[-1].id if has_more and messages else None
     return MessageHistoryResponse(items=items, next_before=next_before)
 
@@ -183,4 +187,4 @@ async def edit_message(
     await _throttle_dm_update(dm.id)
 
     updated_message = await Message.get(id=message_id)
-    return {"status": "ok", "message": serialize_message(updated_message, author)}
+    return {"status": "ok", "message": await serialize_message(updated_message)}

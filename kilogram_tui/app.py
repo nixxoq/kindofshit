@@ -274,7 +274,8 @@ class MainScreen(Screen):
                         yield ListView(id="user-results")
                 with Vertical(id="chat-column"):
                     yield Static("", id="chat-title")
-                    yield Static("", id="pinned-message")
+                    with VerticalScroll(id="pinned-message"):
+                        yield Static("", id="pinned-list")
                     with VerticalScroll(id="messages"):
                         with Vertical(id="message-list"):
                             yield Static("select or search a chat", id="empty-chat")
@@ -688,16 +689,31 @@ class KilogramTUI(App):
 
             self.screen.query_one("#chat-title", Static).update(title)
 
-            pinned_msg = next((m for m in reversed(self.messages) if m.is_pinned), None)
-            pinned_widget = self.screen.query_one("#pinned-message", Static)
 
-            if pinned_msg:
-                content = pinned_msg.content.replace('\n', ' ')
-                if len(content) > 70:
-                    content = content[:67] + "..."
-                pinned_widget.update(f"📌 [bold]{pinned_msg.author.display_name}[/]: {content}")
+            pinned_messages = [m for m in reversed(self.messages) if m.is_pinned]
+
+            pinned_widget = self.screen.query_one("#pinned-message", VerticalScroll)
+            pinned_list = self.screen.query_one("#pinned-list", Static)
+
+            if pinned_messages:
+                rendered = []
+
+                for msg in pinned_messages:
+                    content = msg.content.replace("\n", " ")
+
+                    if len(content) > 70:
+                        content = content[:67] + "..."
+
+                    rendered.append(
+                        f"📌 [bold]{msg.author.display_name}[/] "
+                        f"[italic #caa9be]({msg.author.username})[/]: "
+                        f"{content}"
+                    )
+
+                pinned_list.update("\n".join(rendered))
                 pinned_widget.styles.display = "block"
             else:
+                pinned_list.update("")
                 pinned_widget.styles.display = "none"
 
             message_list = self.screen.query_one("#message-list", Vertical)
