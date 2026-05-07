@@ -35,5 +35,6 @@ class MessageHistoryResponse(BaseModel):
 class EditMessageRequest(BaseModel):
     content: str = Field(min_length=1, max_length=4096)
 
+
 class PinMessageRequest(BaseModel):
     is_pinned: bool

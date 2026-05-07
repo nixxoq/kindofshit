@@ -62,9 +62,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "data": {
                                 "user_id": auth.user.id,
                                 "is_online": is_online,
-                                "last_seen": now.isoformat()
-                            }
-                        }
+                                "last_seen": now.isoformat(),
+                            },
+                        },
                     )
                     continue
             except Exception:
@@ -83,7 +83,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
         now = datetime.now(timezone.utc)
         await User.filter(id=auth.user.id).update(is_online=False, last_seen=now)
-        
+
         all_users = await User.all().values_list("id", flat=True)
         await connection_manager.broadcast(
             list(all_users),
@@ -92,7 +92,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 "data": {
                     "user_id": auth.user.id,
                     "is_online": False,
-                    "last_seen": now.isoformat()
-                }
-            }
+                    "last_seen": now.isoformat(),
+                },
+            },
         )

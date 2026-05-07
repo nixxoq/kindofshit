@@ -71,7 +71,7 @@ class WebSocketListener:
                 raise
             except Exception as exc:
                 self._websocket = None
-                
+
                 await self._status(f"offline: {exc}")
                 try:
                     await asyncio.wait_for(self._stop.wait(), timeout=delay)
