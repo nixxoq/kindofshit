@@ -47,6 +47,7 @@ from app.services.dm import (
     serialize_message,
     edit_message,
     delete_message,
+    mark_messages_as_read,
 )
 from app.services.websocket import connection_manager
 
@@ -115,6 +116,8 @@ async def search_users(
             id=user.id,
             username=user.username,
             display_name=user.display_name,
+            is_online=user.is_online,
+            last_seen=user.last_seen,
         )
         for user in users
     ]
@@ -163,6 +166,27 @@ async def get_message_history(
         )
 
     return await list_messages(dm, limit=limit, before=before)
+
+
+@router.post("/dms/{dm_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+async def read_dm_messages(
+    dm_id: int,
+    auth: AuthenticatedContext = Depends(get_current_auth_context),
+):
+    dm = await get_dm_by_id(dm_id)
+    if not dm or not is_dm_participant(dm, auth.user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="DM not found"
+        )
+
+    did_mark = await mark_messages_as_read(dm, auth.user.id)
+    if did_mark:
+        event = {
+            "type": WSEventType.MESSAGES_READ,
+            "data": {"dm_id": dm.id, "reader_id": auth.user.id},
+        }
+        await connection_manager.broadcast([dm.user_low_id, dm.user_high_id], event)
+    return None
 
 
 @router.post(
@@ -226,6 +250,7 @@ async def update_message(
     await connection_manager.broadcast([dm.user_low_id, dm.user_high_id], event)
     return response_data
 
+
 @router.patch("/dms/{dm_id}/messages/{message_id}/pin", response_model=MessageResponse)
 async def toggle_pin_message(
     dm_id: int,
@@ -233,16 +258,23 @@ async def toggle_pin_message(
     payload: PinMessageRequest,
     auth: AuthenticatedContext = Depends(get_current_auth_context),
 ) -> MessageResponse:
-    
+
     dm = await get_dm_by_id(dm_id)
 
     if not dm or not is_dm_participant(dm, auth.user.id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="DM not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="DM not found"
+        )
 
     from app.db.models import Message as DBMessage
-    msg = await DBMessage.get_or_none(id=message_id, dm_id=dm.id).prefetch_related("author")
+
+    msg = await DBMessage.get_or_none(id=message_id, dm_id=dm.id).prefetch_related(
+        "author"
+    )
     if not msg:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Message not found"
+        )
 
     msg.is_pinned = payload.is_pinned
     await msg.save(update_fields=["is_pinned"])
@@ -253,8 +285,9 @@ async def toggle_pin_message(
         "data": response_data.model_dump(mode="json"),
     }
     await connection_manager.broadcast([dm.user_low_id, dm.user_high_id], event)
-    
+
     return response_data
+
 
 @router.delete(
     "/dms/{dm_id}/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT

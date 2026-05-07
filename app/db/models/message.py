@@ -17,6 +17,7 @@ class Message(BaseDB):
     key_version = fields.IntField(default=1)
     edited_at = fields.DatetimeField(null=True)
     is_pinned = fields.BooleanField(default=False)
+    is_read = fields.BooleanField(default=False)
 
     class Meta:
         table = "messages"

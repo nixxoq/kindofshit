@@ -69,15 +69,22 @@ class UserListItem(ListItem):
 class DMListItem(ListItem):
     def __init__(self, dm: DirectMessage) -> None:
         self.dm = dm
-        status = "[bold green]●[/] " if dm.peer and dm.peer.is_online else ""
         super().__init__(
             Horizontal(
-                Label(dm.title, classes="dm-title"),
+                Label(self._get_title_with_status(), classes="dm-title"),
                 DMCloseButton(dm.id),
                 classes="dm-row-content",
             ),
             classes="list-row",
         )
+
+    def _get_title_with_status(self) -> str:
+        prefix = "[bold green]●[/] " if self.dm.peer and self.dm.peer.is_online else ""
+        return f"{prefix}{self.dm.title}"
+
+    def update_dm(self, dm: DirectMessage) -> None:
+        self.dm = dm
+        self.query_one(".dm-title", Label).update(self._get_title_with_status())
 
 
 class DMCloseButton(Button):
@@ -133,13 +140,28 @@ class MessageWidget(Container):
             else ""
         )
         ts = self.get_relative_time(self.message.created_at)
-
         pin_badge = " 📌" if self.message.is_pinned else ""
+
+        ticks = ""
+        if is_me:
+            ticks = "[#00ff00]✓✓[/] " if self.message.is_read else "[#806070]✓[/] "
+
         with Horizontal(classes="msg-header"):
             yield Static(f"{author}{ed}{pin_badge}", classes="msg-author")
-            yield Static(f"[italic #806070]{ts}[/]", classes="msg-time")
+            yield Static(f"{ticks}[italic #806070]{ts}[/]", classes="msg-time")
 
         yield Static(self.message.content, classes="msg-content")
+
+    def update_message(self, message: Message) -> None:
+        self.message = message
+        is_me = self.message.author_id == self.current_user_id
+        ticks = ""
+        if is_me:
+            ticks = "[#00ff00]✓✓[/] " if self.message.is_read else "[#806070]✓[/] "
+
+        ts = self.get_relative_time(self.message.created_at)
+        self.query_one(".msg-time", Static).update(f"{ticks}[italic #806070]{ts}[/]")
+        self.query_one(".msg-content", Static).update(self.message.content)
 
     def on_mouse_down(self, event: events.MouseDown) -> None:
         if event.button == 3:
@@ -279,7 +301,7 @@ class MainScreen(Screen):
                     with VerticalScroll(id="messages"):
                         with Vertical(id="message-list"):
                             yield Static("select or search a chat", id="empty-chat")
-                
+
                     with Horizontal(id="composer-row"):
                         yield Input(placeholder="message", id="composer")
                         yield Button("send", id="send-message")
@@ -358,6 +380,8 @@ class KilogramTUI(App):
         self.render_messages_lock = asyncio.Lock()
         self.ws_listener: WebSocketListener | None = None
         self.ws_task: asyncio.Task | None = None
+        self.is_app_focused: bool = True
+        self._render_dms_scheduled: bool = False
 
     async def on_mount(self) -> None:
         session = load_session()
@@ -474,14 +498,20 @@ class KilogramTUI(App):
             )
         elif event_type == "user.status_updated":
             await self.handle_status_updated(data)
+        elif event_type == "messages.read":
+            await self.handle_messages_read(int(data["dm_id"]), int(data["reader_id"]))
 
     async def on_app_focus(self, event: AppFocus) -> None:
+        self.is_app_focused = True
         if self.ws_listener is not None:
             await self.ws_listener.send_json(
                 {"type": "status_update", "data": {"is_online": True}}
             )
+        if self.active_dm:
+            await self.api.mark_as_read(self.active_dm.id)
 
     async def on_app_blur(self, event: AppBlur) -> None:
+        self.is_app_focused = False
         if self.ws_listener is not None:
             await self.ws_listener.send_json(
                 {"type": "status_update", "data": {"is_online": False}}
@@ -492,8 +522,7 @@ class KilogramTUI(App):
         is_online = data["is_online"]
         last_seen = data["last_seen"]
 
-        needs_render_dms = False
-
+        changed_dm = False
         for dm in self.dms.values():
             if dm.peer and dm.peer.id == user_id:
                 new_peer = PublicUser(
@@ -509,34 +538,52 @@ class KilogramTUI(App):
                     created_at=dm.created_at,
                     peer=new_peer,
                 )
-                needs_render_dms = True
+                changed_dm = True
                 if self.active_dm and self.active_dm.id == dm.id:
                     self.active_dm = self.dms[dm.id]
+                    self.update_chat_title()
 
-        needs_render_search = False
-        for i, user in enumerate(self.search_results):
-            if user.id == user_id:
-                self.search_results[i] = PublicUser(
-                    id=user.id,
-                    username=user.username,
-                    display_name=user.display_name,
-                    is_online=is_online,
-                    last_seen=last_seen,
-                )
-                needs_render_search = True
+        if changed_dm:
+            await self.schedule_render_dms()
 
-        if needs_render_dms:
-            await self.render_dms()
+    async def schedule_render_dms(self) -> None:
+        if self._render_dms_scheduled:
+            return
+        self._render_dms_scheduled = True
+        await asyncio.sleep(0.3)
+        await self.render_dms()
+        self._render_dms_scheduled = False
+
+    def update_chat_title(self) -> None:
+        if not isinstance(self.screen, MainScreen) or not self.active_dm:
+            return
+        title = self.active_dm.title
+        if self.active_dm.peer:
+            status_text = format_user_status(self.active_dm.peer)
+            title = f"{title}  ·  {status_text}"
+        self.screen.query_one("#chat-title", Static).update(title)
+
+    async def handle_messages_read(self, dm_id: int, reader_id: int) -> None:
+        if self.active_dm and self.active_dm.id == dm_id:
+            for i, msg in enumerate(self.messages):
+                if msg.author_id != reader_id and not msg.is_read:
+                    self.messages[i] = Message(
+                        id=msg.id,
+                        dm_id=msg.dm_id,
+                        author_id=msg.author_id,
+                        author=msg.author,
+                        content=msg.content,
+                        created_at=msg.created_at,
+                        edited_at=msg.edited_at,
+                        is_pinned=msg.is_pinned,
+                        is_read=True,
+                    )
             await self.render_messages()
-
-        if needs_render_search and isinstance(self.screen, MainScreen):
-            await self.render_user_results(self.search_results)
 
     async def handle_message_created_event(self, message: Message) -> None:
         if message.dm_id not in self.dms:
             await self.refresh_dms()
-            if isinstance(self.screen, MainScreen):
-                self.screen.set_status("new message")
+
         if message.dm_id in self.hidden_dm_ids:
             self.hidden_dm_ids.discard(message.dm_id)
             self.persist_hidden_dm_ids()
@@ -544,6 +591,12 @@ class KilogramTUI(App):
 
         if self.active_dm is not None and message.dm_id == self.active_dm.id:
             await self.apply_message_created(message)
+            if (
+                self.session
+                and message.author_id != self.session.user_id
+                and self.is_app_focused
+            ):
+                asyncio.create_task(self.api.mark_as_read(message.dm_id))
 
     async def with_unauthorized_handling(self, action) -> None:
         try:
@@ -578,11 +631,23 @@ class KilogramTUI(App):
         if not isinstance(self.screen, MainScreen):
             return
         dm_list = self.screen.query_one("#dm-list", ListView)
-        await dm_list.clear()
+
+        existing_items = {item.dm.id: item for item in dm_list.query(DMListItem)}
+
+        new_items = []
         for dm in self.dms.values():
             if dm.id in self.hidden_dm_ids:
                 continue
-            await dm_list.append(DMListItem(dm))
+            if dm.id in existing_items:
+                existing_items[dm.id].update_dm(dm)
+            else:
+                new_items.append(DMListItem(dm))
+
+        if new_items:
+            await dm_list.clear()
+            for dm in self.dms.values():
+                if dm.id not in self.hidden_dm_ids:
+                    await dm_list.append(DMListItem(dm))
 
     async def search_users(self, query: str) -> None:
         async def action() -> None:
@@ -652,6 +717,8 @@ class KilogramTUI(App):
             self.messages = list(reversed(page.items))
             self.next_before = page.next_before
             await self.render_messages()
+            if self.is_app_focused:
+                await self.api.mark_as_read(dm.id)
 
         await self.with_unauthorized_handling(action)
 
@@ -680,36 +747,21 @@ class KilogramTUI(App):
             if not isinstance(self.screen, MainScreen) or self.session is None:
                 return
 
-            title = ""
-            if self.active_dm is not None:
-                title = self.active_dm.title
-                if self.active_dm.peer:
-                    status_text = format_user_status(self.active_dm.peer)
-                    title = f"{title}  ·  {status_text}"
-
-            self.screen.query_one("#chat-title", Static).update(title)
-
+            self.update_chat_title()
 
             pinned_messages = [m for m in reversed(self.messages) if m.is_pinned]
-
             pinned_widget = self.screen.query_one("#pinned-message", VerticalScroll)
             pinned_list = self.screen.query_one("#pinned-list", Static)
 
             if pinned_messages:
                 rendered = []
-
                 for msg in pinned_messages:
                     content = msg.content.replace("\n", " ")
-
                     if len(content) > 70:
                         content = content[:67] + "..."
-
                     rendered.append(
-                        f"📌 [bold]{msg.author.display_name}[/] "
-                        f"[italic #caa9be]({msg.author.username})[/]: "
-                        f"{content}"
+                        f"📌 [bold]{msg.author.display_name}[/] [italic #caa9be]({msg.author.username})[/]: {content}"
                     )
-
                 pinned_list.update("\n".join(rendered))
                 pinned_widget.styles.display = "block"
             else:
@@ -717,14 +769,31 @@ class KilogramTUI(App):
                 pinned_widget.styles.display = "none"
 
             message_list = self.screen.query_one("#message-list", Vertical)
-            await message_list.remove_children()
-            if self.next_before is not None:
-                await message_list.mount(Button("load older", id="load-older"))
+
+            existing_widgets = {
+                w.message.id: w for w in message_list.query(MessageWidget)
+            }
+            current_message_ids = {msg.id for msg in self.messages}
+
+            for msg_id, widget in existing_widgets.items():
+                if msg_id not in current_message_ids:
+                    await widget.remove()
+
             if not self.messages:
-                await message_list.mount(Static("no messages", id="empty-chat"))
-                return
-            for message in self.messages:
-                await message_list.mount(MessageWidget(message, self.session.user_id))
+                if not message_list.query("#empty-chat"):
+                    await message_list.mount(Static("no messages", id="empty-chat"))
+            else:
+                if message_list.query("#empty-chat"):
+                    await message_list.query_one("#empty-chat").remove()
+
+                for msg in self.messages:
+                    if msg.id in existing_widgets:
+                        existing_widgets[msg.id].update_message(msg)
+                    else:
+                        await message_list.mount(
+                            MessageWidget(msg, self.session.user_id)
+                        )
+
             messages = self.screen.query_one("#messages", VerticalScroll)
             messages.scroll_end(animate=False)
 
@@ -769,9 +838,7 @@ class KilogramTUI(App):
     async def apply_message_deleted(self, dm_id: int, message_id: int) -> None:
         if self.active_dm is None or dm_id != self.active_dm.id:
             return
-        self.messages = [
-            message for message in self.messages if message.id != message_id
-        ]
+        self.messages = [m for m in self.messages if m.id != message_id]
         await self.render_messages()
 
     def upsert_message(self, message: Message) -> None:

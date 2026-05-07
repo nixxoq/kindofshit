@@ -16,6 +16,7 @@ class WSEventType(str, Enum):
     MESSAGE_CREATED = "message.created"
     MESSAGE_UPDATED = "message.updated"
     MESSAGE_DELETED = "message.deleted"
+    MESSAGES_READ = "messages.read"
 
 
 MSG_LIMIT_DEFAULT = 50

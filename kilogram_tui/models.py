@@ -42,7 +42,6 @@ class PublicUser:
             id=int(data["id"]),
             username=str(data["username"]),
             display_name=str(data["display_name"]),
-
             is_online=bool(data.get("is_online", False)),
             last_seen=data.get("last_seen"),
         )
@@ -85,6 +84,7 @@ class Message:
     created_at: str
     edited_at: str | None = None
     is_pinned: bool = False
+    is_read: bool = False
 
     @classmethod
     def from_json(cls, data: dict) -> "Message":
@@ -97,6 +97,7 @@ class Message:
             created_at=str(data["created_at"]),
             edited_at=data.get("edited_at"),
             is_pinned=bool(data.get("is_pinned", False)),
+            is_read=bool(data.get("is_read", False)),
         )
 
 

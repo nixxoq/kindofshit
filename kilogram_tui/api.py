@@ -137,6 +137,9 @@ class KilogramAPI:
         )
         return DirectMessage.from_json(response.json(), peer=peer)
 
+    async def mark_as_read(self, dm_id: int) -> None:
+        await self._request("POST", f"/api/dms/{dm_id}/read")
+
     async def message_history(
         self,
         dm_id: int,
@@ -172,7 +175,9 @@ class KilogramAPI:
     async def delete_message(self, dm_id: int, message_id: int) -> None:
         await self._request("DELETE", f"/api/dms/{dm_id}/messages/{message_id}")
 
-    async def toggle_pin_message(self, dm_id: int, message_id: int, is_pinned: bool) -> Message:
+    async def toggle_pin_message(
+        self, dm_id: int, message_id: int, is_pinned: bool
+    ) -> Message:
         response = await self._request(
             "PATCH",
             f"/api/dms/{dm_id}/messages/{message_id}/pin",

@@ -120,6 +120,7 @@ async def serialize_message(message: Message) -> MessageResponse:
         created_at=message.created_at,
         edited_at=message.edited_at,
         is_pinned=message.is_pinned,
+        is_read=message.is_read,
     )
 
 
@@ -150,6 +151,13 @@ async def list_messages(
     items = [await serialize_message(message) for message in messages]
     next_before = messages[-1].id if has_more and messages else None
     return MessageHistoryResponse(items=items, next_before=next_before)
+
+
+async def mark_messages_as_read(dm: DirectMessage, reader_id: int) -> bool:
+    affected = await Message.filter(
+        dm_id=dm.id, author_id__not=reader_id, is_read=False
+    ).update(is_read=True)
+    return affected > 0
 
 
 async def delete_message(dm: DirectMessage, author: User, message_id: int) -> dict:
